@@ -1,0 +1,19 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "garmin-mcp",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-11-04",
+	// global_fetch_strictly_public is required for OAuth Client ID Metadata Documents.
+	"compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+	"vars": {
+		// The GitHub account allowed through login (numeric id of "ortix").
+		"ALLOWED_GITHUB_USER_ID": "1493849",
+		// The exact URL pasted into claude.ai. Overridden in .dev.vars for local dev.
+		"MCP_SERVER_URL": "http://localhost:8787/mcp"
+	},
+	"kv_namespaces": [
+		{ "binding": "OAUTH_KV", "id": "local-oauth-kv" },
+		{ "binding": "GARMIN_CACHE", "id": "local-garmin-cache" }
+	],
+	"observability": { "enabled": true, "head_sampling_rate": 1 }
+}

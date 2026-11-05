@@ -20,12 +20,13 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "wrangler": "^4",
-    "vitest": "^4.1.0",
-    "@cloudflare/vitest-pool-workers": "0.23.0",
-    "typescript": "latest",
+    "@cloudflare/vitest-plugin": "^1.5.1",
     "@cloudflare/workers-types": "latest",
+    "@types/node": "^22",
     "tsx": "latest",
-    "@types/node": "^22"
+    "typescript": "latest",
+    "vite": "^8.3.5",
+    "vitest": "^5.1.0",
+    "wrangler": "^4"
   }
 }
