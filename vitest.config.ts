@@ -10,6 +10,7 @@ export default defineConfig({
 					GARMIN_API_KEY: "test-api-key",
 					GITHUB_CLIENT_ID: "test-client-id",
 					GITHUB_CLIENT_SECRET: "test-client-secret",
+					MCP_SERVER_URL: "https://mcp.test/mcp",
 				},
 			},
 		}),
