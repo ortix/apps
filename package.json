@@ -1,0 +1,31 @@
+{
+  "name": "garmin-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --port 8787",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "smoke": "tsx scripts/smoke.ts"
+  },
+  "dependencies": {
+    "@cloudflare/workers-oauth-provider": "^1.2.4",
+    "@garmin/fitsdk": "^21.221.0",
+    "@modelcontextprotocol/client": "^2.4.0",
+    "@modelcontextprotocol/server": "^2.4.0",
+    "agents": "^0.33.0",
+    "fflate": "^0.8.3",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "wrangler": "^4",
+    "vitest": "^4.1.0",
+    "@cloudflare/vitest-pool-workers": "0.23.0",
+    "typescript": "latest",
+    "@cloudflare/workers-types": "latest",
+    "tsx": "latest",
+    "@types/node": "^22"
+  }
+}
