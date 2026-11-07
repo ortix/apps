@@ -29,33 +29,24 @@ In **Zero Trust › Access controls › Service credentials › Service tokens �
 
 ## 3. Cloudflare Access (Zero Trust)
 
-The order matters: the garmin-mcp bypass must exist **before** the wildcard, or claude.ai loses the connector.
+Team `nicktsutsu` (`https://nicktsutsu.cloudflareaccess.com`), with GitHub as the only login method. Set up on 2026-11-07, as recorded here:
 
-1. **Zero Trust organization.** Open **Zero Trust** and choose a team name, for example `tsutsu`. Pick the **Free** plan. Cloudflare asks for payment details even for Free, but doesn't charge.
-2. **GitHub login.**
-   1. On GitHub, go to **Settings › Developer settings › OAuth Apps › New**.
-      - Homepage: `https://<team>.cloudflareaccess.com`
-      - Callback: `https://<team>.cloudflareaccess.com/cdn-cgi/access/callback`
-   2. Then in **Zero Trust › Integrations › Identity providers › Add › GitHub**, paste its id and secret.
-   3. Select **Test**.
-3. **garmin-mcp bypass** (first). Go to **Access controls › Applications › Add › Self-hosted**.
-   - Name `garmin-mcp (bypass)`, hostname `garmin-mcp.tsutsu.dev`.
-   - Policy: action **Bypass**, include **Everyone**.
-   - garmin-mcp runs its own OAuth with a numeric GitHub id allowlist, so it stays protected.
-4. **Wildcard for all apps.** Add another **Self-hosted** application.
-   - Name `tsutsu.dev apps`, hostname `*.tsutsu.dev`.
-   - Policy `owner`, action **Allow**:
-     - Include **Emails**: the primary email of your GitHub account.
-     - Require **Login Methods**: GitHub.
-     - Access can't match a numeric GitHub id. The email of your GitHub login is the closest stable identity.
-   - Policy `ci-smoke`, action **Service Auth**: include **Service Token** `ci-smoke`.
-   - Login methods: GitHub only, with **Instant authentication** on.
-   - Leave **Managed OAuth** off for now. See "MCP servers and Access" below.
-5. **Other subdomains.** Any other public `*.tsutsu.dev` hostname you already use, outside this repo, is now behind the login too. Give each one its own application with a Bypass policy if it must stay public. `*.home.tsutsu.dev` isn't affected, because it never goes through Cloudflare.
+1. **Zero Trust organization** on the Free plan. Cloudflare asks for payment details, but doesn't charge.
+2. **GitHub login:** a GitHub OAuth app with the callback `https://nicktsutsu.cloudflareaccess.com/cdn-cgi/access/callback`, added under **Integrations › Identity providers › GitHub**.
+3. **`tsutsu.dev apps`** (Self-hosted, hostname `*.tsutsu.dev`). This covers every app, garmin-mcp included. There's no bypass.
+   - Policy `owner`, action **Allow**: include **Emails** = the owner's email, and require **Login Methods** = GitHub. Access can't match a numeric GitHub id, so the email is the identity.
+   - GitHub is the only login method, with **Instant authentication** on.
+   - **Managed OAuth** is on, so Access is the OAuth server that claude.ai signs in to for MCP servers:
+     - Allowed redirect URIs (dynamic client registration): `https://claude.ai/api/mcp/auth_callback`
+     - Access token lifetime: 15 min
+     - Grant session duration: 30 days
+   - Browsers get the GitHub login (302). MCP clients get a 401 that points at Access's OAuth metadata.
+4. **`health checks`** (Self-hosted, hostname `*.tsutsu.dev`, path `healthz`). Policy `ci-smoke`, action **Service Auth**, with the `ci-smoke` service token. It's more specific than the wildcard, so the token works on `/healthz` and nowhere else.
+5. **Other subdomains:** any other public `*.tsutsu.dev` hostname is behind the login too, unless it gets its own Bypass application. `*.home.tsutsu.dev` isn't affected, because it never goes through Cloudflare.
 
 **How to check:**
-- `curl -sI https://garmin-mcp.tsutsu.dev/mcp` should still answer `401` from the Worker, with a `WWW-Authenticate` header.
-- A new app's URL should redirect to `<team>.cloudflareaccess.com`.
+- `curl -s -o /dev/null -w "%{http_code}" https://<app>.tsutsu.dev/healthz` answers `403` without the service token.
+- `curl -sI -X POST https://<app>.tsutsu.dev/mcp` answers `401`, with a `WWW-Authenticate` header pointing at `/.well-known/cloudflare-access-protected-resource/mcp`.
 
 ## 4. GitHub
 
@@ -89,6 +80,6 @@ At claude.ai/code, create an environment named `apps` for the repo `ortix/apps`:
 
 ## MCP servers and Access
 
-- **garmin-mcp:** keeps its own OAuth for now, behind the bypass.
-- **New MCP servers** (from `templates/mcp`): these have no auth code and rely on Access **Managed OAuth**, which makes Access the OAuth server that claude.ai signs in to.
-- **Before relying on it:** that path has to be tested once, by turning Managed OAuth on for one MCP app and connecting claude.ai. Until then, an MCP app built from the template returns 403 to claude.ai, because the wildcard sends it to the browser login.
+- **Every MCP server** on the platform, garmin-mcp included, has no auth code of its own. Access Managed OAuth signs claude.ai in, and the Worker refuses any request without `ctx.access`.
+- **This works with claude.ai.** It was tested with a throwaway `mcp-hello` server on 2026-11-07 (since deleted), then garmin-mcp moved to it.
+- **A new MCP app needs no Access change.** Add it in claude.ai as a custom connector at `https://<name>.tsutsu.dev/mcp`, and sign in with GitHub.
