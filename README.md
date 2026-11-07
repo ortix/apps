@@ -20,6 +20,7 @@ claude.ai ──OAuth + MCP──▶ Cloudflare Worker ──▶ Garmin Personal
                              │  OAuthProvider: tokens, discovery, client registration
                              │  /authorize, /callback: consent, then GitHub login and allowlist
                              │  createMcpHandler: stateless Streamable HTTP at /mcp
+                             │  served at https://garmin-mcp.tsutsu.dev
                              └─ KV: OAUTH_KV (grants), GARMIN_CACHE (token, activities, parsed FIT)
 ```
 
@@ -111,8 +112,8 @@ GitHub OAuth apps allow one callback URL, so production needs its own app.
    npx wrangler kv namespace create GARMIN_CACHE
    ```
 
-2. Set `MCP_SERVER_URL` in `wrangler.jsonc` to `https://garmin-mcp.<your-subdomain>.workers.dev/mcp`. It must exactly match the URL you give claude.ai, because tokens are bound to it.
-3. Create a second GitHub OAuth app with the callback `https://garmin-mcp.<your-subdomain>.workers.dev/callback`.
+2. The Worker is served on the Custom Domain `garmin-mcp.tsutsu.dev`, set in `routes` in `wrangler.jsonc`. Cloudflare creates the DNS record and certificate on deploy. `workers.dev` and preview URLs are off. `MCP_SERVER_URL` must exactly match the URL you give claude.ai, because tokens are bound to it.
+3. Create a second GitHub OAuth app with the callback `https://garmin-mcp.tsutsu.dev/callback`.
 4. Set the secrets. Each command prompts for its value, except the Garmin key, which is piped from your environment:
 
    ```bash
@@ -136,7 +137,7 @@ GitHub OAuth apps allow one callback URL, so production needs its own app.
 ## Add the connector on claude.ai
 
 1. Go to [Customize > Connectors](https://claude.ai/customize/connectors) and click **Add custom connector**. On Team or Enterprise plans an owner adds it under Organization settings > Connectors.
-2. Enter `https://garmin-mcp.<your-subdomain>.workers.dev/mcp` and click **Add**. Leave the OAuth client fields empty.
+2. Enter `https://garmin-mcp.tsutsu.dev/mcp` and click **Add**. Leave the OAuth client fields empty.
 3. Click **Connect**, approve the consent page, and sign in with the allowlisted GitHub account.
 4. In a chat, turn it on from the **+** button under **Connectors**. Connectors you add on the web are also available in Claude on desktop and mobile.
 
