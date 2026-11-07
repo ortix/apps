@@ -1,0 +1,19 @@
+{
+	"$schema": "../../node_modules/wrangler/config-schema.json",
+	"name": "template-mcp",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-11-04",
+	"compatibility_flags": ["nodejs_compat"],
+	"vars": {
+		// The exact URL pasted into claude.ai as a custom connector.
+		"MCP_SERVER_URL": "https://template-mcp.tsutsu.dev/mcp",
+	},
+	// Served only on its Custom Domain. Cloudflare Access signs the user in for
+	// claude.ai with Managed OAuth, so this Worker has no auth code of its own.
+	"routes": [{ "pattern": "template-mcp.tsutsu.dev", "custom_domain": true }],
+	"workers_dev": false,
+	"preview_urls": false,
+	// No invocation logs: they record full URLs, which can include OAuth codes.
+	"observability": { "enabled": true, "logs": { "enabled": true, "invocation_logs": false } },
+	"access": { "dev": { "aud": "local-dev", "identity": { "email": "dev@example.com", "name": "Local Dev" } } },
+}

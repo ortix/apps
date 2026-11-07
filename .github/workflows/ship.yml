@@ -1,0 +1,103 @@
+name: Ship
+
+# Merges and deploys an agent's pull request once CI passes, so a cloud session
+# can ship without the owner merging by hand.
+#
+# workflow_run always uses this file as it is on main, so a branch can't change
+# the rules it is judged by. The gate only reads the branch's files through git;
+# nothing from the branch is executed here.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions: {}
+
+concurrency:
+  group: ship
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      startsWith(github.event.workflow_run.head_branch, 'claude/') &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      merged: ${{ steps.merge.outputs.merged }}
+      sha: ${{ steps.merge.outputs.sha }}
+      base: ${{ steps.pr.outputs.base_sha }}
+      apps: ${{ steps.gate.outputs.apps }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+      HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Find the pull request
+        id: pr
+        run: |
+          pr=$(gh api "repos/$REPO/pulls?state=open&head=${REPO%%/*}:$HEAD_BRANCH" --jq '.[0] // empty')
+          if [ -z "$pr" ]; then echo "No open PR for $HEAD_BRANCH."; exit 0; fi
+          number=$(jq -r .number <<<"$pr")
+          if [ "$(jq -r .head.sha <<<"$pr")" != "$HEAD_SHA" ]; then echo "PR #$number has newer commits; a later run will handle it."; exit 0; fi
+          if [ "$(jq -r .base.ref <<<"$pr")" != "main" ]; then echo "PR #$number doesn't target main."; exit 0; fi
+          if [ "$(jq -r .draft <<<"$pr")" = "true" ]; then echo "PR #$number is a draft."; exit 0; fi
+          if jq -e '.labels[] | select(.name == "hold")' <<<"$pr" >/dev/null; then echo "PR #$number is labelled hold."; exit 0; fi
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+          echo "base_sha=$(git rev-parse origin/main)" >> "$GITHUB_OUTPUT"
+
+      - name: Check the change against the platform rules
+        id: gate
+        if: steps.pr.outputs.number
+        run: |
+          git fetch --no-tags origin "$HEAD_SHA"
+          node scripts/ship-gate.mjs origin/main "$HEAD_SHA" > gate.json
+          cat gate.json
+          echo "ok=$(jq -r .ok gate.json)" >> "$GITHUB_OUTPUT"
+          echo "apps=$(jq -c .apps gate.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Explain why it waits for the owner
+        if: steps.gate.outputs.ok == 'false'
+        env:
+          NUMBER: ${{ steps.pr.outputs.number }}
+        run: |
+          marker="<!-- ship-gate:$HEAD_SHA -->"
+          if gh api "repos/$REPO/issues/$NUMBER/comments" --paginate --jq '.[].body' | grep -qF "$marker"; then exit 0; fi
+          body=$(printf '%s\n**Not merged automatically.** This change needs the owner to review and merge it:\n\n%s\n' "$marker" "$(jq -r '.reasons[] | "- " + .' gate.json)")
+          gh api "repos/$REPO/issues/$NUMBER/comments" -f body="$body" >/dev/null
+          echo "::notice::PR #$NUMBER waits for the owner."
+
+      - name: Merge
+        id: merge
+        if: steps.gate.outputs.ok == 'true'
+        env:
+          NUMBER: ${{ steps.pr.outputs.number }}
+        run: |
+          sha=$(gh api -X PUT "repos/$REPO/pulls/$NUMBER/merge" -f merge_method=squash -f sha="$HEAD_SHA" --jq .sha)
+          echo "merged=true" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "::notice::Merged PR #$NUMBER as $sha"
+          gh api -X DELETE "repos/$REPO/git/refs/heads/$HEAD_BRANCH" >/dev/null || true
+
+  deploy:
+    needs: gate
+    if: needs.gate.outputs.merged == 'true' && needs.gate.outputs.apps != '[]'
+    uses: ./.github/workflows/deploy.yml
+    with:
+      sha: ${{ needs.gate.outputs.sha }}
+      base: ${{ needs.gate.outputs.base }}
+      apps: ${{ needs.gate.outputs.apps }}
+    secrets: inherit

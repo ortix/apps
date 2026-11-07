@@ -1,0 +1,106 @@
+name: Deploy
+
+# Deploys apps to production from main. The Cloudflare and Access tokens live
+# in the "production" environment, which only main can use.
+#
+# - Ship calls this after merging an agent's pull request.
+# - A push to main (the owner merging by hand) deploys the apps it changed.
+# - The owner can deploy one app by hand from the Actions tab, including apps
+#   with "autoDeploy": false.
+on:
+  push:
+    branches: [main]
+  workflow_call:
+    inputs:
+      sha: { type: string, required: true }
+      base: { type: string, required: true }
+      apps: { type: string, required: true }
+  workflow_dispatch:
+    inputs:
+      app:
+        description: App directory under apps/
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.plan.outputs.sha }}
+      base: ${{ steps.plan.outputs.base }}
+      apps: ${{ steps.plan.outputs.apps }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - id: plan
+        env:
+          CALL_SHA: ${{ inputs.sha }}
+          CALL_BASE: ${{ inputs.base }}
+          CALL_APPS: ${{ inputs.apps }}
+          DISPATCH_APP: ${{ github.event_name == 'workflow_dispatch' && inputs.app || '' }}
+          EVENT: ${{ github.event_name }}
+          ACTOR: ${{ github.triggering_actor }}
+          OWNER: ${{ github.repository_owner }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.event.after }}
+        run: |
+          if [ -n "$DISPATCH_APP" ]; then
+            if [ "$ACTOR" != "$OWNER" ]; then echo "::error::Only $OWNER can deploy by hand."; exit 1; fi
+            if [ ! -f "apps/$DISPATCH_APP/wrangler.jsonc" ]; then echo "::error::apps/$DISPATCH_APP doesn't exist."; exit 1; fi
+            { echo "sha=$(git rev-parse HEAD)"; echo "base=$(git rev-parse HEAD)"; echo "apps=$(jq -cn --arg a "$DISPATCH_APP" '[$a]')"; } >> "$GITHUB_OUTPUT"
+          elif [ -n "$CALL_SHA" ]; then
+            { echo "sha=$CALL_SHA"; echo "base=$CALL_BASE"; echo "apps=$CALL_APPS"; } >> "$GITHUB_OUTPUT"
+          elif [ "$EVENT" = "push" ] && [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ]; then
+            { echo "sha=$AFTER"; echo "base=$BEFORE"; echo "apps=$(node scripts/changed-apps.mjs "$BEFORE" "$AFTER")"; } >> "$GITHUB_OUTPUT"
+          else
+            echo "apps=[]" >> "$GITHUB_OUTPUT"
+          fi
+          cat "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: plan
+    if: needs.plan.outputs.apps != '[]' && needs.plan.outputs.apps != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Typecheck and test the apps being deployed
+        env:
+          APPS: ${{ needs.plan.outputs.apps }}
+        run: |
+          for app in $(jq -r '.[]' <<<"$APPS"); do
+            npm run typecheck -w "apps/$app"
+            npm test -w "apps/$app"
+          done
+      - name: Deploy and smoke-test
+        env:
+          APPS: ${{ needs.plan.outputs.apps }}
+          BASE: ${{ needs.plan.outputs.base }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          # shellcheck disable=SC2046
+          node scripts/deploy.mjs --base "$BASE" $(jq -r '.[]' <<<"$APPS")

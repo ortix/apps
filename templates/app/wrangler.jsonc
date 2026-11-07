@@ -1,0 +1,21 @@
+{
+	"$schema": "../../node_modules/wrangler/config-schema.json",
+	"name": "template-app",
+	"main": "src/index.tsx",
+	"compatibility_date": "2026-11-04",
+	// Served only on its Custom Domain, which Cloudflare Access protects.
+	// workers.dev and preview URLs would bypass Access, so they stay off.
+	"routes": [{ "pattern": "template-app.tsutsu.dev", "custom_domain": true }],
+	"workers_dev": false,
+	"preview_urls": false,
+	// Files in public/ are served directly, still behind Access.
+	"assets": { "directory": "./public" },
+	"observability": { "enabled": true, "logs": { "enabled": true, "invocation_logs": false } },
+	// Simulates the Access login for `wrangler dev`. Ignored in production.
+	"access": { "dev": { "aud": "local-dev", "identity": { "email": "dev@example.com", "name": "Local Dev" } } },
+	// Add storage only when the app needs it. Leave ids out: the first deploy
+	// creates the resource and later deploys reuse it.
+	//   "d1_databases": [{ "binding": "DB" }],
+	//   "kv_namespaces": [{ "binding": "KV" }],
+	//   "r2_buckets": [{ "binding": "FILES" }],
+}

@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(npm ci*)",
+      "Bash(npm install*)",
+      "Bash(npm run *)",
+      "Bash(npm test*)",
+      "Bash(npm ls*)",
+      "Bash(npm view *)",
+      "Bash(npx vitest*)",
+      "Bash(npx tsc*)",
+      "Bash(npx wrangler dev*)",
+      "Bash(npx wrangler types*)",
+      "Bash(npx wrangler deploy --dry-run*)",
+      "Bash(node scripts/*)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git checkout*)",
+      "Bash(git switch*)",
+      "Bash(git fetch*)",
+      "Bash(git pull*)",
+      "Bash(git rebase*)",
+      "Bash(git push -u origin claude/*)",
+      "Bash(git push origin claude/*)",
+      "Bash(gh api repos/*)",
+      "Bash(curl *)"
+    ],
+    "deny": [
+      "Bash(*wrangler deploy)",
+      "Bash(*wrangler deploy --strict*)",
+      "Bash(*wrangler versions*)",
+      "Bash(*wrangler rollback*)",
+      "Bash(*wrangler secret*)",
+      "Bash(*wrangler delete*)",
+      "Bash(*wrangler kv namespace delete*)",
+      "Bash(*wrangler d1 delete*)",
+      "Bash(*wrangler r2 bucket delete*)",
+      "Bash(*wrangler login*)",
+      "Bash(gh workflow run*)",
+      "Bash(*dispatches*)",
+      "Bash(gh api -X DELETE*)",
+      "Bash(gh api --method DELETE*)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git push origin main*)",
+      "Read(**/.dev.vars)",
+      "Read(**/.dev.vars.*)",
+      "Read(**/.env)",
+      "Read(**/.env.*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -d node_modules ] || npm ci --no-audit --no-fund >/dev/null 2>&1 || true"
+          }
+        ]
+      }
+    ]
+  }
+}

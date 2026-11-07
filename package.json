@@ -1,0 +1,22 @@
+{
+  "name": "tsutsu-apps",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "templates/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "check": "node scripts/check-apps.mjs && npm run typecheck && npm test",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm test --workspaces --if-present",
+    "new-app": "node scripts/new-app.mjs",
+    "test:scripts": "node --test scripts/test/*.test.mjs"
+  },
+  "overrides": {
+    "zod": "4.6.7"
+  }
+}
