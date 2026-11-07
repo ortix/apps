@@ -372,8 +372,10 @@ export async function getDailyHealth(deps: Deps, input: { start_date: string; en
 	const value = <T>(s: PromiseSettledResult<T[]> | undefined): T[] => (s?.status === "fulfilled" ? s.value : []);
 
 	const byDate = new Map<string, Record<string, unknown>>();
-	const row = (date: string) => {
-		if (date < start || date > end) return null;
+	const row = (date: string | null | undefined) => {
+		// Garmin sometimes returns a row with a null calendarDate. Comparing null to
+		// a string is false both ways, so it would slip past the range check below.
+		if (typeof date !== "string" || date < start || date > end) return null;
 		let entry = byDate.get(date);
 		if (!entry) byDate.set(date, (entry = { date }));
 		return entry;
