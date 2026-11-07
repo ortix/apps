@@ -39,9 +39,13 @@ const wranglerEnv = {
 const ENV_FILE = /^\.(env|dev\.vars)(\..*)?$/;
 const envFiles = (dir) => readdirSync(dir).filter((file) => ENV_FILE.test(file) && !file.endsWith(".example"));
 
-async function cf(path) {
+/** Every Worker this pipeline deploys carries this tag, so a retried deploy can tell its own Workers from anyone else's. */
+const PLATFORM_TAG = "ortix-apps";
+
+async function cf(path, init = {}) {
 	const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${account}${path}`, {
-		headers: { Authorization: `Bearer ${token}` },
+		...init,
+		headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
 	});
 	const body = await response.json().catch(() => ({}));
 	return { status: response.status, body };
@@ -65,10 +69,14 @@ for (const name of names) {
 		const other = (domains.body.result ?? []).find((d) => d.hostname === host && d.service !== name);
 		if (other) throw new Error(`${host} is already attached to Worker "${other.service}"; refusing to move it`);
 
-		// A new app must not overwrite a Worker this repo didn't create.
-		if (base && !existedAtBase.has(name)) {
-			const existing = await cf(`/workers/scripts/${encodeURIComponent(name)}/settings`);
-			if (existing.status === 200) throw new Error(`a Worker named "${name}" already exists in the account; pick another name`);
+		// A new app must not overwrite a Worker this repo didn't create. A Worker
+		// carrying the platform tag was created by an earlier attempt of this
+		// pipeline (for example a deploy cancelled after upload), so it may be updated.
+		const settingsPath = `/workers/scripts/${encodeURIComponent(name)}/script-settings`;
+		const existing = await cf(settingsPath);
+		const tags = existing.status === 200 ? (existing.body.result?.tags ?? []) : [];
+		if (base && !existedAtBase.has(name) && existing.status === 200 && !tags.includes(PLATFORM_TAG)) {
+			throw new Error(`a Worker named "${name}" already exists in the account and wasn't created by this repo; pick another name`);
 		}
 
 		const stray = [...envFiles("."), ...envFiles(`apps/${name}`)];
@@ -76,6 +84,13 @@ for (const name of names) {
 
 		const result = spawnSync(process.execPath, [wranglerBin, "deploy", "--strict"], { cwd: `apps/${name}`, stdio: "inherit", env: wranglerEnv });
 		if (result.status !== 0) throw new Error(`wrangler deploy exited with ${result.status}`);
+
+		const after = await cf(settingsPath);
+		const currentTags = after.body.result?.tags ?? [];
+		if (!currentTags.includes(PLATFORM_TAG)) {
+			const tagged = await cf(settingsPath, { method: "PATCH", body: JSON.stringify({ tags: [...currentTags, PLATFORM_TAG] }) });
+			if (tagged.status !== 200) console.log(`::warning::Could not tag ${name} as platform-managed (HTTP ${tagged.status})`);
+		}
 
 		await smokeApp(app, { retries: existedAtBase.has(name) ? 6 : 30 });
 		console.log(`Deployed and verified https://${host}`);
