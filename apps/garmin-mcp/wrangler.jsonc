@@ -3,28 +3,27 @@
 	"name": "garmin-mcp",
 	"main": "src/index.ts",
 	"compatibility_date": "2026-11-04",
-	// global_fetch_strictly_public is required for OAuth Client ID Metadata Documents.
+	// global_fetch_strictly_public: outgoing fetches may only reach public addresses.
 	"compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
 	"vars": {
-		// The GitHub account allowed through login (numeric id of "ortix").
-		"ALLOWED_GITHUB_USER_ID": "1493849",
-		// The exact URL pasted into claude.ai. Overridden in .dev.vars for local dev.
+		// The exact URL pasted into claude.ai as a custom connector.
 		"MCP_SERVER_URL": "https://garmin-mcp.tsutsu.dev/mcp"
 	},
-	// Served only on the custom domain: tokens are bound to MCP_SERVER_URL, so
-	// workers.dev and preview URLs would just answer 401s.
+	// Served only on the custom domain, where Cloudflare Access signs the user in.
+	// workers.dev and preview URLs would bypass Access, so they stay off.
 	"routes": [{ "pattern": "garmin-mcp.tsutsu.dev", "custom_domain": true }],
 	"workers_dev": false,
 	"preview_urls": false,
 	"kv_namespaces": [
-		{ "binding": "OAUTH_KV", "id": "5b517f1ce6ca4e0ea395beebcfc43131" },
 		{ "binding": "GARMIN_CACHE", "id": "87b5bc8f50f24674a8477a44b6aaca03" }
 	],
 	// Only console.log output from src/log.ts. Invocation logs would record full
-	// request URLs, including OAuth codes in query strings.
+	// request URLs, which can include OAuth codes.
 	"observability": {
 		"enabled": true,
 		"head_sampling_rate": 1,
 		"logs": { "enabled": true, "invocation_logs": false }
-	}
+	},
+	// Simulates the Access login for `npm run dev`. Ignored in production.
+	"access": { "dev": { "aud": "local-dev", "identity": { "email": "dev@example.com", "name": "Local Dev" } } }
 }

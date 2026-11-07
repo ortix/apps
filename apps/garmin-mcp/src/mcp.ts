@@ -1,10 +1,8 @@
-import { insufficientScope, type OAuthResourceContext } from "@cloudflare/workers-oauth-provider";
 import { McpServer } from "@modelcontextprotocol/server";
 import { createMcpHandler } from "agents/mcp/server";
 import { env } from "cloudflare:workers";
 import { z } from "zod";
-import { isAllowedUser, SCOPE_READ } from "./auth";
-import type { AppEnv, AuthProps } from "./env";
+import type { AppEnv } from "./env";
 import { GarminAuthError } from "./garmin/token";
 import { GarminClient, GarminApiError } from "./garmin/client";
 import { FitParseError } from "./garmin/fit";
@@ -137,18 +135,9 @@ export function createServer(appEnv: AppEnv = env as unknown as AppEnv): McpServ
 
 const mcpHandler = createMcpHandler(() => createServer());
 
-/**
- * Reached only with a valid token. The allowlist is re-checked on each request,
- * so changing ALLOWED_GITHUB_USER_ID cuts off grants that were already issued.
- */
+/** Reached only through src/index.ts, after Cloudflare Access has authenticated the request. */
 export const mcpApiHandler = {
-	fetch(request: Request, appEnv: AppEnv, executionContext: ExecutionContext): Promise<Response> | Response {
-		const ctx = executionContext as OAuthResourceContext<AuthProps>;
-		if (!isAllowedUser(ctx.props?.githubUserId, appEnv.ALLOWED_GITHUB_USER_ID)) {
-			log({ rid: requestId(), event: "auth", outcome: "denied", status: 403 });
-			return new Response("Forbidden\n", { status: 403 });
-		}
-		if (!ctx.auth.scope.includes(SCOPE_READ)) return insufficientScope(ctx.auth, [SCOPE_READ]);
+	fetch(request: Request, appEnv: AppEnv, ctx: ExecutionContext): Promise<Response> | Response {
 		return mcpHandler(request, appEnv, ctx);
 	},
 };
