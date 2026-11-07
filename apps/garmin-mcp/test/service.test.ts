@@ -219,6 +219,17 @@ describe("getDailyHealth", () => {
 		});
 	});
 
+	it("ignores rows from Garmin that have no calendarDate", async () => {
+		const d = deps((url) => {
+			if (url.pathname.includes("dailysummaries")) return Response.json({ data: [{ calendarDate: "2026-01-15", heartRate: { restingValue: 48 } }, { calendarDate: null, heartRate: { restingValue: 50 } }] });
+			if (url.pathname.includes("sleep-service")) return Response.json([{ calendarDate: null, sleepTimeSeconds: 100 }]);
+			return Response.json({ hrvSummaries: [{ calendarDate: null, lastNightAvg: 40 }, {}] });
+		});
+		const result = await getDailyHealth(d, { start_date: "2026-01-15", end_date: "2026-01-16" });
+		expect(result.count).toBe(1);
+		expect(result.days?.map((day) => day.date)).toEqual(["2026-01-15"]);
+	});
+
 	it("splits long ranges into Garmin's per-request windows", async () => {
 		const d = deps((url) => (url.pathname.includes("dailysummaries") ? Response.json({ data: [] }) : url.pathname.includes("sleep") ? Response.json([]) : Response.json({ hrvSummaries: [] })));
 		await getDailyHealth(d, { start_date: "2026-01-01", end_date: "2026-03-31" });
