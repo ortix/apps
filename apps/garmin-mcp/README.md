@@ -51,6 +51,8 @@ Parsing a FIT file takes tens of milliseconds of CPU (about 20–40ms for a 40-m
 
 You need Node 22+, a Cloudflare account, and a Garmin Personal API key from [Garmin Connect](https://connect.garmin.com/app/settings/personalApiToken).
 
+This app lives in the `ortix/apps` monorepo. Install from the repo root, and run the commands below from `apps/garmin-mcp/`:
+
 ```bash
 npm ci
 ```
@@ -114,11 +116,7 @@ The KV namespaces, Custom Domain and `MCP_SERVER_URL` are already set in `wrangl
    rm -P .env.production
    ```
 
-4. Later deploys keep the existing secrets:
-
-   ```bash
-   npm run deploy
-   ```
+4. Later deploys go through the platform's CI and keep the existing secrets, because `wrangler deploy` never deletes or changes them. This app has `"autoDeploy": false` in `package.json`, so merging a change doesn't deploy it. Deploy it from the repo's **Actions** tab: **Deploy** › **Run workflow** › app `garmin-mcp`. The run typechecks, tests, deploys and checks that the OAuth metadata is live.
 
 5. Watch production logs, filtered to paths, status codes and the Worker's own log lines:
 

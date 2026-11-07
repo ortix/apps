@@ -5,7 +5,6 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev --port 8787",
-    "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "smoke": "tsx scripts/smoke.ts"
@@ -21,12 +20,28 @@
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "^1.5.1",
-    "@cloudflare/workers-types": "latest",
+    "@cloudflare/workers-types": "5.20261104.1",
     "@types/node": "^22",
-    "tsx": "latest",
-    "typescript": "latest",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
     "vite": "^8.3.5",
     "vitest": "^5.1.0",
     "wrangler": "^4"
+  },
+  "platform": {
+    "kind": "mcp",
+    "description": "Read-only MCP server for Garmin Connect data, used from claude.ai.",
+    "autoDeploy": false,
+    "protectedVars": [
+      "MCP_SERVER_URL",
+      "ALLOWED_GITHUB_USER_ID"
+    ],
+    "smoke": [
+      {
+        "path": "/.well-known/oauth-protected-resource/mcp",
+        "status": 200,
+        "contains": "https://garmin-mcp.tsutsu.dev/mcp"
+      }
+    ]
   }
 }
