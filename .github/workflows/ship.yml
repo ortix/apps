@@ -95,6 +95,8 @@ jobs:
   deploy:
     needs: gate
     if: needs.gate.outputs.merged == 'true' && needs.gate.outputs.apps != '[]'
+    permissions:
+      contents: read
     uses: ./.github/workflows/deploy.yml
     with:
       sha: ${{ needs.gate.outputs.sha }}

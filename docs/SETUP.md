@@ -67,7 +67,7 @@ Set up by the agent through the API, recorded here:
   - The `checks` and `secrets` CI jobs must pass.
   - No force pushes and no deletion.
   - Repository admins can bypass, for emergencies.
-- **Actions:** only GitHub's own actions and `gitleaks/gitleaks-action` are allowed. All are pinned to commit SHAs.
+- **Actions:** only GitHub's own actions are allowed, and they must be pinned to commit SHAs. gitleaks is downloaded with a checksum check instead.
 
 For you to do: install the **Claude GitHub App** on `ortix/apps` only. It's offered when you first open the repo at claude.ai/code. Don't give cloud sessions a personal access token.
 
