@@ -2,7 +2,7 @@ import { zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 import { GarminClient } from "../src/garmin/client";
 import { GarminTokenProvider } from "../src/garmin/token";
-import { getActivity, getActivityStreams, getDailyHealth, listActivities, MAX_RESPONSE_CHARS, ToolInputError } from "../src/service";
+import { getActivity, getActivityStreams, getDailyHealth, getHeartRateZones, listActivities, MAX_RESPONSE_CHARS, ToolInputError } from "../src/service";
 import { SYNTHETIC_RUN_FIT } from "./fixtures/synthetic-run";
 import { fakeJwt, MemoryStore, mockFetch, type Route } from "./helpers";
 
@@ -88,17 +88,39 @@ describe("getActivity", () => {
 		splitSummaries: [{ splitType: "INTERVAL_ACTIVE", noOfSplits: 2, distance: 360, duration: 120, averageSpeed: 3 }],
 	};
 
-	it("joins the summary with FIT laps and caches both", async () => {
-		const d = deps((url) => (url.pathname.includes("download-service") ? new Response(ZIP) : Response.json(detail)));
+	const workouts = [{ workoutName: "Easy", sport: "RUNNING", steps: [{ stepIndex: 0, intensity: "ACTIVE", durationType: "TIME", durationValue: 1800, targetType: "HEART_RATE", targetValue: 2 }] }];
+	const route: Route = (url) =>
+		url.pathname.includes("download-service") ? new Response(ZIP) : url.pathname.endsWith("/workouts") ? Response.json(workouts) : Response.json(detail);
+
+	it("joins the summary with FIT laps and the planned workout, and caches all three", async () => {
+		const d = deps(route);
 		const first = await getActivity(d, "42");
 		expect(first).toMatchObject({ id: "42", type: "running", start_utc: "2026-01-15T07:00:00Z", pace: "5:33", perceived_effort_rpe: 3 });
 		expect(first.laps).toHaveLength(2);
+		expect(first.planned_workout).toEqual([{ name: "Easy", sport: "running", steps: [{ step: 0, intensity: "active", duration_s: 1800, target: { type: "heart_rate", zone: 2 } }] }]);
 		expect(JSON.stringify(first)).not.toContain("52.1");
-		expect(d.apiCalls()).toHaveLength(2);
+		expect(d.apiCalls()).toHaveLength(3);
 
 		const second = await getActivity(d, "42");
 		expect(second).toEqual(first);
-		expect(d.apiCalls()).toHaveLength(2);
+		expect(d.apiCalls()).toHaveLength(3);
+	});
+
+	it("omits planned_workout when none was used", async () => {
+		const d = deps((url, init) => (url.pathname.endsWith("/workouts") ? Response.json([]) : route(url, init)));
+		const result = await getActivity(d, "42");
+		expect(result.planned_workout).toBeUndefined();
+		expect(result.note).toBeUndefined();
+	});
+
+	it("still returns the activity when the workout lookup fails, and retries it next time", async () => {
+		let fail = true;
+		const d = deps((url, init) => (url.pathname.endsWith("/workouts") && fail ? new Response(null, { status: 500 }) : route(url, init)));
+		const first = await getActivity(d, "42");
+		expect(first.laps).toHaveLength(2);
+		expect(first.note).toMatch(/planned workout is unavailable/);
+		fail = false;
+		expect((await getActivity(d, "42")).planned_workout).toHaveLength(1);
 	});
 
 	it("still returns the summary when the file is not FIT", async () => {
@@ -155,6 +177,16 @@ describe("getActivityStreams", () => {
 	it("explains non-FIT activities", async () => {
 		const d = deps(() => new Response(zipSync({ "a.tcx": new Uint8Array([1]) })));
 		await expect(getActivityStreams(d, "42")).rejects.toThrow(/not FIT/);
+	});
+});
+
+describe("getHeartRateZones", () => {
+	it("returns compact zone sets", async () => {
+		const d = deps(() => Response.json([{ sport: "DEFAULT", trainingMethod: "HR_MAX", maxHeartRateUsed: 190, zone1Floor: 95, zone2Floor: 114, zone3Floor: 133, zone4Floor: 152, zone5Floor: 171 }]));
+		const result = await getHeartRateZones(d);
+		expect(result.count).toBe(1);
+		expect(result.zone_sets[0]?.zones?.[2]).toEqual({ zone: 3, from_bpm: 133, to_bpm: 152 });
+		expect(d.apiCalls()[0]?.url.pathname).toBe("/biometric-service/heartRateZones/v2");
 	});
 });
 

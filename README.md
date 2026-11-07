@@ -7,8 +7,9 @@ A private, read-only remote MCP server that gives Claude access to your own Garm
 | Tool | Use it for |
 |---|---|
 | `list_activities(start_date, end_date, type?)` | Finding workouts and their ids |
-| `get_activity(id)` | One workout's summary and laps |
+| `get_activity(id)` | One workout's summary, laps and planned structured workout |
 | `get_activity_streams(id, resolution?)` | Time series for detailed analysis, 10s per point by default |
+| `get_heart_rate_zones()` | Heart-rate zones per sport, and the max/resting/threshold HR behind them |
 | `get_daily_health(start_date, end_date?)` | Sleep, HRV, resting HR, stress and Body Battery, up to 92 days |
 
 Responses use SI units plus pace in min/km, and are capped at 100,000 characters with a note when anything is reduced. GPS coordinates are never read from FIT files or returned.
@@ -39,6 +40,7 @@ Decisions worth knowing about:
 | Garmin access token (24h) | `GARMIN_CACHE`, keyed by a hash of the API key | Refreshed under 1h remaining, and once after a 401 |
 | Activity summary | `GARMIN_CACHE` | 7 days, because names and elevation correction can change |
 | Parsed FIT (no GPS) | `GARMIN_CACHE` | 90 days |
+| Planned workout for an activity | `GARMIN_CACHE` | 90 days |
 | Daily health | Not cached | Today's values keep changing |
 
 ### Cloudflare plan

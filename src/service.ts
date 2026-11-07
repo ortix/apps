@@ -6,6 +6,7 @@
 import { GarminApiError, type GarminClient } from "./garmin/client";
 import { downsample, dropEmpty, extractFit, parseFit, type ParsedFit } from "./garmin/fit";
 import { paceMinKm, paceMmss, round } from "./units";
+import { type ActivityWorkoutRaw, compactWorkouts, compactZones, type HeartRateZonesRaw } from "./workouts";
 
 /** claude.ai caps tool results near 150k characters; stay well below that. */
 export const MAX_RESPONSE_CHARS = 100_000;
@@ -18,6 +19,7 @@ const FIT_TTL_S = 90 * 86_400; // The original file never changes.
 // Bump a version when its cached shape or meaning changes.
 const FIT_CACHE_VERSION = "v1";
 const ACTIVITY_CACHE_VERSION = "v2";
+const WORKOUT_CACHE_VERSION = "v1";
 
 export class ToolInputError extends Error {
 	constructor(message: string) {
@@ -167,17 +169,25 @@ export async function getActivity(deps: Deps, id: string) {
 		return compactDetail(detail);
 	});
 
+	const notes: string[] = [];
+	const [fit, workouts] = await Promise.allSettled([
+		loadFit(deps, id),
+		// The planned workout never changes once recorded. Failures are not cached.
+		cached(deps.cache, `${WORKOUT_CACHE_VERSION}:workouts:${id}`, FIT_TTL_S, async () =>
+			compactWorkouts(await deps.client.getJson<ActivityWorkoutRaw[]>(`/activity-service/activity/${id}/workouts`)),
+		),
+	]);
+
 	// Per-lap data exists only in the FIT file. The summary is still useful without it.
 	let laps: unknown[] | null = null;
-	let note: string | null = null;
-	try {
-		const fit = await loadFit(deps, id);
-		if (fit) laps = fit.laps;
-		else note = "This activity's original file is not FIT, so per-lap data is unavailable.";
-	} catch (error) {
-		note = `Per-lap data is unavailable: ${(error as Error).message}`;
-	}
-	return dropEmpty({ ...summary, laps, note });
+	if (fit.status === "rejected") notes.push(`Per-lap data is unavailable: ${(fit.reason as Error).message}`);
+	else if (fit.value) laps = fit.value.laps;
+	else notes.push("This activity's original file is not FIT, so per-lap data is unavailable.");
+
+	if (workouts.status === "rejected") notes.push(`The planned workout is unavailable: ${(workouts.reason as Error).message}`);
+	const planned = workouts.status === "fulfilled" ? workouts.value : null;
+
+	return dropEmpty({ ...summary, planned_workout: planned, laps, note: notes.length ? notes.join(" ") : null });
 }
 
 function compactDetail(detail: ActivityDetail) {
@@ -263,6 +273,13 @@ export async function getActivityStreams(deps: Deps, id: string, resolution: num
 		columns: result.columns,
 		rows: result.rows,
 	});
+}
+
+// ---- get_heart_rate_zones --------------------------------------------------
+
+export async function getHeartRateZones(deps: Deps) {
+	const zones = compactZones(await deps.client.getJson<HeartRateZonesRaw[]>("/biometric-service/heartRateZones/v2"));
+	return { count: zones.length, zone_sets: zones };
 }
 
 // ---- get_daily_health ------------------------------------------------------

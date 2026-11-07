@@ -4,7 +4,7 @@
  */
 import { GarminClient } from "../src/garmin/client";
 import { GarminTokenProvider } from "../src/garmin/token";
-import { getActivity, getActivityStreams, getDailyHealth, listActivities } from "../src/service";
+import { getActivity, getActivityStreams, getDailyHealth, getHeartRateZones, listActivities } from "../src/service";
 
 const apiKey = process.env.GARMIN_API_KEY ?? process.env.GARMIN_TOKEN;
 if (!apiKey) throw new Error("Set GARMIN_API_KEY or GARMIN_TOKEN");
@@ -25,6 +25,14 @@ const list = await listActivities(deps, { start_date: day(30), end_date: day(0) 
 show("list_activities", list);
 const id = (list.activities?.[0] as { id: string } | undefined)?.id as string;
 show("get_activity", await getActivity(deps, id));
+for (const a of (list.activities ?? []) as { id: string }[]) {
+	const detail = await getActivity(deps, a.id);
+	if (detail.planned_workout) {
+		show("get_activity with planned_workout", detail.planned_workout);
+		break;
+	}
+}
+show("get_heart_rate_zones", await getHeartRateZones(deps));
 show("get_activity_streams", await getActivityStreams(deps, id));
 show("get_activity_streams 1s", await getActivityStreams(deps, id, 1));
 show("get_daily_health 1d", await getDailyHealth(deps, { start_date: day(1) }));

@@ -10,7 +10,7 @@ import { GarminClient, GarminApiError } from "./garmin/client";
 import { FitParseError } from "./garmin/fit";
 import { GarminTokenProvider } from "./garmin/token";
 import { log, requestId } from "./log";
-import { DEFAULT_RESOLUTION_S, type Deps, getActivity, getActivityStreams, getDailyHealth, listActivities, MAX_HEALTH_RANGE_DAYS, ToolInputError } from "./service";
+import { DEFAULT_RESOLUTION_S, type Deps, getActivity, getActivityStreams, getDailyHealth, getHeartRateZones, listActivities, MAX_HEALTH_RANGE_DAYS, ToolInputError } from "./service";
 
 const date = z.iso.date();
 const activityId = z.union([z.string().regex(/^[1-9]\d*$/), z.number().int().positive()]).describe("Activity id from list_activities.");
@@ -79,7 +79,7 @@ export function createServer(appEnv: AppEnv = env as unknown as AppEnv): McpServ
 		"get_activity",
 		{
 			title: "Get activity details",
-			description: `Get one activity's full summary and its laps. Use it to review a specific workout: lap-by-lap pace and heart rate, interval structure, training effect, temperature. For how a metric changed within a lap or over time, use get_activity_streams instead. ${UNITS}`,
+			description: `Get one activity's full summary, its laps and, when one was used, the planned structured workout. Use it to review a specific workout: lap-by-lap pace and heart rate, interval structure, planned vs actual, training effect, temperature. planned_workout lists each step's duration (seconds, metres or an end condition) and target (a zone number, or a decoded range in bpm, % of max HR, watts, % of FTP or pace); repeat steps say which step to repeat from and how many times. For how a metric changed within a lap or over time, use get_activity_streams instead. ${UNITS}`,
 			inputSchema: { id: activityId },
 			annotations: READ_ONLY,
 		},
@@ -104,6 +104,18 @@ export function createServer(appEnv: AppEnv = env as unknown as AppEnv): McpServ
 			annotations: READ_ONLY,
 		},
 		({ id, resolution }) => run("get_activity_streams", () => getActivityStreams(garmin, String(id), resolution)),
+	);
+
+	server.registerTool(
+		"get_heart_rate_zones",
+		{
+			title: "Get heart rate zones",
+			description:
+				"Get the user's heart-rate zones as configured in Garmin Connect: one zone set per sport (\"default\" applies when a sport has none), with the method used (such as lactate threshold or % of max HR) and the max, resting and lactate-threshold heart rates behind it. Each zone runs from from_bpm up to to_bpm; zone 5 ends at max HR. Use it to judge time in zone or effort from heart-rate data in get_activity_streams or get_activity, and to read workout targets given as zone numbers.",
+			inputSchema: {},
+			annotations: READ_ONLY,
+		},
+		() => run("get_heart_rate_zones", () => getHeartRateZones(garmin)),
 	);
 
 	server.registerTool(

@@ -163,7 +163,7 @@ describe("GitHub login flow", () => {
 		});
 		expect(list.status).toBe(200);
 		const text = await list.text();
-		for (const name of ["list_activities", "get_activity", "get_activity_streams", "get_daily_health"]) expect(text).toContain(name);
+		for (const name of ["list_activities", "get_activity", "get_activity_streams", "get_heart_rate_zones", "get_daily_health"]) expect(text).toContain(name);
 		expect(text).toContain('"readOnlyHint":true');
 	});
 });
