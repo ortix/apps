@@ -9,6 +9,7 @@
 // Needs CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID. Never prints them, and
 // never sets, changes or deletes Worker secrets: `wrangler deploy` leaves them as they are.
 import { spawnSync } from "node:child_process";
+import { readdirSync } from "node:fs";
 import { appsAt, readAppAt, validateApp } from "./lib/platform.mjs";
 import { smokeApp } from "./smoke.mjs";
 
@@ -20,11 +21,23 @@ for (let i = 0; i < args.length; i++) {
 	else names.push(args[i]);
 }
 
-const { CLOUDFLARE_API_TOKEN: token, CLOUDFLARE_ACCOUNT_ID: account } = process.env;
-if (!token || !account) {
-	console.error("CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID must be set.");
+const { CLOUDFLARE_API_TOKEN: token, CLOUDFLARE_ACCOUNT_ID: account, WRANGLER_BIN: wranglerBin } = process.env;
+if (!token || !account || !wranglerBin) {
+	console.error("CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID and WRANGLER_BIN must be set.");
 	process.exit(2);
 }
+
+// Wrangler reads .env files from the project directory into its own
+// environment, which could redirect its API calls and the token with them.
+// Explicit values win over .env, and committed env files are refused outright.
+const wranglerEnv = {
+	...process.env,
+	CLOUDFLARE_API_BASE_URL: "https://api.cloudflare.com/client/v4",
+	CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV: "false",
+	WRANGLER_SEND_METRICS: "false",
+};
+const ENV_FILE = /^\.(env|dev\.vars)(\..*)?$/;
+const envFiles = (dir) => readdirSync(dir).filter((file) => ENV_FILE.test(file) && !file.endsWith(".example"));
 
 async function cf(path) {
 	const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${account}${path}`, {
@@ -58,7 +71,10 @@ for (const name of names) {
 			if (existing.status === 200) throw new Error(`a Worker named "${name}" already exists in the account; pick another name`);
 		}
 
-		const result = spawnSync("npx", ["wrangler", "deploy", "--strict"], { cwd: `apps/${name}`, stdio: "inherit", env: process.env });
+		const stray = [...envFiles("."), ...envFiles(`apps/${name}`)];
+		if (stray.length > 0) throw new Error(`refusing to deploy with env files present: ${stray.join(", ")}`);
+
+		const result = spawnSync(process.execPath, [wranglerBin, "deploy", "--strict"], { cwd: `apps/${name}`, stdio: "inherit", env: wranglerEnv });
 		if (result.status !== 0) throw new Error(`wrangler deploy exited with ${result.status}`);
 
 		await smokeApp(app, { retries: existedAtBase.has(name) ? 6 : 30 });

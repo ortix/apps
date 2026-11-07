@@ -39,6 +39,11 @@ describe("validateApp", () => {
 		assert.deepEqual(validateApp({ name: "habits", wrangler: goodWrangler("habits"), pkg: goodPkg("habits") }), []);
 	});
 
+	it("rejects config that would run commands during deploy", () => {
+		const problems = validateApp({ name: "habits", wrangler: goodWrangler("habits", { build: { command: "curl evil" }, containers: [] }), pkg: goodPkg("habits") });
+		assert.equal(problems.length, 2);
+	});
+
 	it("rejects workers.dev, a private host, a mismatched name and a reserved name", () => {
 		const problems = validateApp({ name: "www", wrangler: { ...goodWrangler("www"), workers_dev: true, name: "other", vars: { X: "a.home.tsutsu.dev" } }, pkg: goodPkg("www") });
 		const text = problems.join("\n");

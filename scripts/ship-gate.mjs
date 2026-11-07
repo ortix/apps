@@ -17,6 +17,11 @@ export function gate(base, head) {
 	const touched = new Set();
 
 	for (const { status, path } of files) {
+		const file = path.split("/").pop();
+		if (status !== "D" && /^\.(env|dev\.vars)(\..*)?$/.test(file) && !file.endsWith(".example")) {
+			reasons.push(`${path} looks like a secrets file and must not be committed`);
+			continue;
+		}
 		if (SENSITIVE_PATHS.some((re) => re.test(path))) {
 			reasons.push(`${path} is part of the platform's guardrails`);
 			continue;

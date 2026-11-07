@@ -127,6 +127,9 @@ export function validateApp(app) {
 		problems.push(`${name}: routes must be exactly [{ "pattern": "${host}", "custom_domain": true }]`);
 	}
 	if (wrangler.route) problems.push(`${name}: use "routes", not "route"`);
+	// Both make `wrangler deploy` run commands, and deploy runs with the Cloudflare token.
+	for (const key of ["build", "containers"]) if (key in wrangler) problems.push(`${name}: "${key}" isn't allowed in wrangler.jsonc`);
+	if (wrangler.env) problems.push(`${name}: named environments aren't used on this platform`);
 	if (JSON.stringify(wrangler).includes(PRIVATE_SUFFIX)) problems.push(`${name}: must not reference *${PRIVATE_SUFFIX}`);
 	if (!pkg) {
 		problems.push(`${name}: missing package.json`);

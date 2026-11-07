@@ -84,15 +84,17 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - name: Typecheck and test the apps being deployed
-        env:
-          APPS: ${{ needs.plan.outputs.apps }}
+      # This job holds the Cloudflare token, so nothing from the repo may run
+      # here except scripts/ from main. Tests already passed in CI. App
+      # dependencies are installed without their install scripts, only for
+      # wrangler to bundle. Wrangler itself comes from npm at a pinned version,
+      # not from the repo's lockfile.
+      - name: Install app dependencies (no install scripts)
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Install wrangler
         run: |
-          for app in $(jq -r '.[]' <<<"$APPS"); do
-            npm run typecheck -w "apps/$app"
-            npm test -w "apps/$app"
-          done
+          npm install --no-save --no-audit --no-fund --ignore-scripts --prefix "$RUNNER_TEMP/wrangler" wrangler@4.157.0
+          echo "WRANGLER_BIN=$RUNNER_TEMP/wrangler/node_modules/wrangler/bin/wrangler.js" >> "$GITHUB_ENV"
       - name: Deploy and smoke-test
         env:
           APPS: ${{ needs.plan.outputs.apps }}
