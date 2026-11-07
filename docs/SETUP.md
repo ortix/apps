@@ -60,13 +60,13 @@ The order matters: the garmin-mcp bypass must exist **before** the wildcard, or 
 ## 4. GitHub
 
 Set up by the agent through the API, recorded here:
-- **Private repo** `ortix/apps`.
+- **Public repo** `ortix/apps`. It holds no secrets: those live only in the `production` environment. Workflow runs from outside contributors need approval.
 - **Environment `production`:** only the `main` branch can deploy to it.
 - **Ruleset on `main`:**
   - A pull request is required, with no reviewers needed.
   - The `checks` and `secrets` CI jobs must pass.
   - No force pushes and no deletion.
-  - Repository admins can bypass, for emergencies.
+  - Repository admins can bypass only by merging a PR, never by pushing directly. Use the Claude GitHub App for cloud sessions, not `/web-setup` with your own token.
 - **Actions:** only GitHub's own actions are allowed, and they must be pinned to commit SHAs. gitleaks is downloaded with a checksum check instead.
 
 For you to do: install the **Claude GitHub App** on `ortix/apps` only. It's offered when you first open the repo at claude.ai/code. Don't give cloud sessions a personal access token.
