@@ -90,7 +90,7 @@ export function createServer(appEnv: AppEnv = env as unknown as AppEnv): McpServ
 		"get_activity_streams",
 		{
 			title: "Get activity time series",
-			description: `Get an activity's time series as columns and rows: time, distance, speed, pace, heart rate, cadence, elevation, and power if recorded. GPS position is never included. Use it for analysis the lap data can't answer, such as pacing drift, heart-rate decoupling, or effort on a climb. Use get_activity for ordinary workout questions, because this response is much larger. Each row averages its time bucket; t_s is seconds since the start, including pauses. Cadence units are given in cadence_unit. If the requested resolution would be too large to return, a coarser one is used and a note says so. ${UNITS}`,
+			description: `Get an activity's time series as columns and rows: time, distance, speed, pace, heart rate, cadence, elevation, and power if recorded. GPS position is never included. Use it for analysis the lap data can't answer, such as pacing drift, heart-rate decoupling, or effort on a climb. Use get_activity for ordinary workout questions, because this response is much larger. Each row covers one time bucket starting at t_s (seconds since the start, including pauses): distance_m is the cumulative distance at t_s, and the other columns are averages over the bucket. Cadence units are given in cadence_unit. If the requested resolution would be too large to return, a coarser one is used and a note says so. ${UNITS}`,
 			inputSchema: {
 				id: activityId,
 				resolution: z

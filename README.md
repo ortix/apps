@@ -70,14 +70,14 @@ npm ci
    printf 'GARMIN_API_KEY=%s\n' "$GARMIN_TOKEN" >> .dev.vars
    ```
 
-4. Start the Worker and the MCP Inspector in separate terminals, then connect the Inspector to `http://localhost:8787/mcp` and run its OAuth flow:
+4. Start the Worker, then run the Inspector check in a second terminal. It runs the full OAuth flow, calls every tool and prints only sizes and errors. Open the sign-in link it prints in a browser **on the same machine**, because both redirects go to `localhost`. Add `KEEP_AUTH=1` to reuse the login across runs.
 
    ```bash
    npm run dev
    ```
 
    ```bash
-   npx @modelcontextprotocol/inspector
+   scripts/inspector-oauth-check.sh
    ```
 
 To check the Garmin client alone, `npm run smoke` prints field names and counts, never values.
@@ -98,41 +98,35 @@ Tests run inside workerd with Garmin and GitHub mocked. The FIT fixture is synth
 
 GitHub OAuth apps allow one callback URL, so production needs its own app.
 
-1. Sign in and create the KV namespaces. Put the two ids in `wrangler.jsonc`:
+The KV namespaces, Custom Domain and `MCP_SERVER_URL` are already set in `wrangler.jsonc`. For a fresh account, create the namespaces with `npx wrangler kv namespace create <NAME>` and replace the ids.
+
+1. The Worker is served on the Custom Domain `garmin-mcp.tsutsu.dev`, set in `routes`. Cloudflare creates the DNS record and certificate on deploy. `workers.dev` and preview URLs are off. `MCP_SERVER_URL` must exactly match the URL you give claude.ai, because tokens are bound to it.
+2. Create a second GitHub OAuth app with the callback `https://garmin-mcp.tsutsu.dev/callback`.
+3. For the first deploy, upload secrets with the code, so the Worker is never live without them. Create `.env.production` (gitignored, `chmod 600`) containing `GITHUB_CLIENT_ID=…`, `GITHUB_CLIENT_SECRET=…` and the literal line `GARMIN_API_KEY=${GARMIN_TOKEN}`. Wrangler expands that line from your shell, so the key never sits in the file. Then deploy and delete the file:
 
    ```bash
-   npx wrangler login
+   npx wrangler deploy --secrets-file .env.production
    ```
 
    ```bash
-   npx wrangler kv namespace create OAUTH_KV
+   rm -P .env.production
    ```
 
-   ```bash
-   npx wrangler kv namespace create GARMIN_CACHE
-   ```
-
-2. The Worker is served on the Custom Domain `garmin-mcp.tsutsu.dev`, set in `routes` in `wrangler.jsonc`. Cloudflare creates the DNS record and certificate on deploy. `workers.dev` and preview URLs are off. `MCP_SERVER_URL` must exactly match the URL you give claude.ai, because tokens are bound to it.
-3. Create a second GitHub OAuth app with the callback `https://garmin-mcp.tsutsu.dev/callback`.
-4. Set the secrets. Each command prompts for its value, except the Garmin key, which is piped from your environment:
-
-   ```bash
-   printenv GARMIN_TOKEN | npx wrangler secret put GARMIN_API_KEY
-   ```
-
-   ```bash
-   npx wrangler secret put GITHUB_CLIENT_ID
-   ```
-
-   ```bash
-   npx wrangler secret put GITHUB_CLIENT_SECRET
-   ```
-
-5. Deploy:
+4. Later deploys keep the existing secrets:
 
    ```bash
    npm run deploy
    ```
+
+5. Watch production logs, filtered to paths, status codes and the Worker's own log lines:
+
+   ```bash
+   scripts/tail.sh
+   ```
+
+### Split DNS on the home network
+
+`tsutsu.dev` is Tailscale split DNS, pointed at the UniFi gateway (`192.168.1.1`), which answers `*.tsutsu.dev` with a LAN address. The gateway has a **Forward Domain** policy sending `garmin-mcp.tsutsu.dev` to `1.1.1.1`, so browsers at home and on the tailnet reach Cloudflare for the sign-in. Without it, the GitHub login fails on those networks. claude.ai itself is unaffected either way.
 
 ## Add the connector on claude.ai
 
@@ -162,6 +156,7 @@ There's nothing to clear: the token cache is keyed by a hash of the API key, so 
 
 - All tools are read-only and annotated as such. There is no authless endpoint or fallback.
 - The GitHub login requests no scopes. Its token is used once to read your user id and is never stored.
-- Logs go through `src/log.ts`, which only has fields for request id, tool name, outcome, status and timing. Error messages never include Garmin's response bodies.
+- Logs go through `src/log.ts`, which only has fields for request id, tool name, outcome, status and timing. Cloudflare's invocation logs are off, because they would record full URLs, including OAuth codes. Error messages never include Garmin's response bodies.
+- The connector's refresh token lasts 30 days from sign-in (the library default). Expect to click **Connect** again on claude.ai about once a month.
 - To cut off access, change `ALLOWED_GITHUB_USER_ID`. Existing grants are refused on their next request.
 - Secrets live in Wrangler secrets and the gitignored `.dev.vars`. Check for staged secrets before committing.

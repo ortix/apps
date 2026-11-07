@@ -84,14 +84,14 @@ describe("getActivity", () => {
 		activityId: 42,
 		activityName: "Run",
 		activityTypeDTO: { typeKey: "running" },
-		summaryDTO: { startTimeGMT: "2026-01-15T07:00:00.0", distance: 360, duration: 120, averageSpeed: 3, startLatitude: 52.1 },
+		summaryDTO: { startTimeGMT: "2026-01-15T07:00:00.0", distance: 360, duration: 120, averageSpeed: 3, startLatitude: 52.1, directWorkoutRpe: 30 },
 		splitSummaries: [{ splitType: "INTERVAL_ACTIVE", noOfSplits: 2, distance: 360, duration: 120, averageSpeed: 3 }],
 	};
 
 	it("joins the summary with FIT laps and caches both", async () => {
 		const d = deps((url) => (url.pathname.includes("download-service") ? new Response(ZIP) : Response.json(detail)));
 		const first = await getActivity(d, "42");
-		expect(first).toMatchObject({ id: "42", type: "running", start_utc: "2026-01-15T07:00:00Z", pace: "5:33" });
+		expect(first).toMatchObject({ id: "42", type: "running", start_utc: "2026-01-15T07:00:00Z", pace: "5:33", perceived_effort_rpe: 3 });
 		expect(first.laps).toHaveLength(2);
 		expect(JSON.stringify(first)).not.toContain("52.1");
 		expect(d.apiCalls()).toHaveLength(2);

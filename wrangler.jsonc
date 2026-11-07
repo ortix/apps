@@ -20,5 +20,11 @@
 		{ "binding": "OAUTH_KV", "id": "5b517f1ce6ca4e0ea395beebcfc43131" },
 		{ "binding": "GARMIN_CACHE", "id": "87b5bc8f50f24674a8477a44b6aaca03" }
 	],
-	"observability": { "enabled": true, "head_sampling_rate": 1 }
+	// Only console.log output from src/log.ts. Invocation logs would record full
+	// request URLs, including OAuth codes in query strings.
+	"observability": {
+		"enabled": true,
+		"head_sampling_rate": 1,
+		"logs": { "enabled": true, "invocation_logs": false }
+	}
 }

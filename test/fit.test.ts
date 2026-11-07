@@ -63,7 +63,8 @@ describe("downsample", () => {
 		const result = downsample(series, 10);
 		const col = (name: string) => result.columns.indexOf(name);
 		expect(result.rows[0]?.[col("hr_bpm")]).toBe(145); // mean of 140..149, rounded
-		expect(result.rows[0]?.[col("distance_m")]).toBeCloseTo(27); // last sample in the bucket
+		expect(result.rows[0]?.[col("distance_m")]).toBe(0); // cumulative distance at t_s
+		expect(result.rows[1]?.[col("distance_m")]).toBe(30);
 		expect(result.rows[0]?.[col("pace_min_km")]).toBeCloseTo(5.56, 2);
 	});
 

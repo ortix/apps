@@ -165,8 +165,9 @@ function mean(values: (number | null)[], from: number, to: number): number | nul
 
 /**
  * Averages samples into fixed time buckets. Averaging keeps short surges visible
- * in the mean, unlike picking every Nth sample. Distance takes the bucket's last
- * value because it is cumulative. Columns with no data at all are omitted.
+ * in the mean, unlike picking every Nth sample. Distance is cumulative, so it
+ * takes the first value in the bucket, aligned with t_s. Columns with no data
+ * at all are omitted.
  */
 export function downsample(series: Series, resolutionS: number): Downsampled {
 	const rows: (number | null)[][] = [];
@@ -176,8 +177,9 @@ export function downsample(series: Series, resolutionS: number): Downsampled {
 		let to = from + 1;
 		while (to < series.t.length && Math.floor((series.t[to] as number) / resolutionS) === bucket) to++;
 
+		// Cumulative distance at the bucket's start, so each row describes the moment t_s.
 		let distance: number | null = null;
-		for (let i = to - 1; i >= from && distance === null; i--) distance = series.distance_m[i] ?? null;
+		for (let i = from; i < to && distance === null; i++) distance = series.distance_m[i] ?? null;
 		const speed = mean(series.speed_mps, from, to);
 		rows.push([
 			bucket * resolutionS,

@@ -15,7 +15,9 @@ const ACTIVITY_PAGE_SIZE = 100;
 const DAY_MS = 86_400_000;
 const ACTIVITY_TTL_S = 7 * 86_400; // Names and elevation correction can still change.
 const FIT_TTL_S = 90 * 86_400; // The original file never changes.
-const CACHE_VERSION = "v1";
+// Bump a version when its cached shape or meaning changes.
+const FIT_CACHE_VERSION = "v1";
+const ACTIVITY_CACHE_VERSION = "v2";
 
 export class ToolInputError extends Error {
 	constructor(message: string) {
@@ -151,7 +153,7 @@ interface ActivityDetail {
 }
 
 async function loadFit(deps: Deps, id: string): Promise<ParsedFit | null> {
-	const result = await cached(deps.cache, `${CACHE_VERSION}:fit:${id}`, FIT_TTL_S, async () => {
+	const result = await cached(deps.cache, `${FIT_CACHE_VERSION}:fit:${id}`, FIT_TTL_S, async () => {
 		const fit = extractFit(await deps.client.downloadActivityZip(id));
 		return { fit: fit ? parseFit(fit) : null };
 	});
@@ -159,7 +161,7 @@ async function loadFit(deps: Deps, id: string): Promise<ParsedFit | null> {
 }
 
 export async function getActivity(deps: Deps, id: string) {
-	const summary = await cached(deps.cache, `${CACHE_VERSION}:activity:${id}`, ACTIVITY_TTL_S, async () => {
+	const summary = await cached(deps.cache, `${ACTIVITY_CACHE_VERSION}:activity:${id}`, ACTIVITY_TTL_S, async () => {
 		const detail = await deps.client.getJson<ActivityDetail>(`/activity-service/activity/${id}`);
 		if (!detail) throw new GarminApiError("Garmin has no such activity.", 404);
 		return compactDetail(detail);
@@ -213,7 +215,8 @@ function compactDetail(detail: ActivityDetail) {
 		anaerobic_training_effect: round(num(s.anaerobicTrainingEffect), 1),
 		training_effect_label: s.trainingEffectLabel,
 		training_load: round(num(s.activityTrainingLoad), 1),
-		perceived_effort_rpe: num(s.directWorkoutRpe),
+		// Garmin stores RPE x10 (10-100); report the 1-10 scale the user entered.
+		perceived_effort_rpe: num(s.directWorkoutRpe) === null ? null : round((num(s.directWorkoutRpe) as number) / 10, 1),
 		split_summaries_by_type: detail.splitSummaries?.map((split) =>
 			dropEmpty({
 				split_type: split.splitType,
