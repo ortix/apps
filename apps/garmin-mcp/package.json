@@ -10,7 +10,6 @@
     "smoke": "tsx scripts/smoke.ts"
   },
   "dependencies": {
-    "@cloudflare/workers-oauth-provider": "^1.2.4",
     "@garmin/fitsdk": "^21.221.0",
     "@modelcontextprotocol/client": "^2.4.0",
     "@modelcontextprotocol/server": "^2.4.0",
@@ -33,14 +32,13 @@
     "description": "Read-only MCP server for Garmin Connect data, used from claude.ai.",
     "autoDeploy": false,
     "protectedVars": [
-      "MCP_SERVER_URL",
-      "ALLOWED_GITHUB_USER_ID"
+      "MCP_SERVER_URL"
     ],
     "smoke": [
       {
-        "path": "/.well-known/oauth-protected-resource/mcp",
+        "path": "/healthz",
         "status": 200,
-        "contains": "https://garmin-mcp.tsutsu.dev/mcp"
+        "contains": "ok"
       }
     ]
   }

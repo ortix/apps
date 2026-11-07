@@ -1,5 +1,3 @@
-# Copy to .dev.vars (gitignored). Use the GitHub OAuth app whose callback is
-# http://localhost:8787/callback. Add GARMIN_API_KEY as described in the README.
-GITHUB_CLIENT_ID=
-GITHUB_CLIENT_SECRET=
+# Copy to .dev.vars for local development: cp .dev.vars.example .dev.vars
+# Then add your Garmin key from your environment (see README). Never commit .dev.vars.
 MCP_SERVER_URL=http://localhost:8787/mcp
