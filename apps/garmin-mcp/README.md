@@ -109,9 +109,9 @@ The KV namespace, Custom Domain and `MCP_SERVER_URL` are already set in `wrangle
    scripts/tail.sh
    ```
 
-### Split DNS on the home network
+### DNS
 
-`tsutsu.dev` was set up as Tailscale split DNS, pointed at the UniFi gateway (`192.168.1.1`), which answered `*.tsutsu.dev` with a LAN address. The gateway had a **Forward Domain** policy sending `garmin-mcp.tsutsu.dev` to `1.1.1.1`, so browsers at home and on the tailnet reached Cloudflare for the sign-in. If that's still in place, every public app on `*.tsutsu.dev` needs the same forwarding to be usable from a browser at home. claude.ai itself is unaffected either way.
+`garmin-mcp.tsutsu.dev` is a public name, like every `*.tsutsu.dev` app, and resolves to Cloudflare from any network, home and tailnet included. Only `*.home.tsutsu.dev` uses Tailscale split DNS to route into the home network, and this app doesn't use it.
 
 ## Add the connector on claude.ai
 
