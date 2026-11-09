@@ -18,7 +18,7 @@ const ACTIVITY_TTL_S = 7 * 86_400; // Names and elevation correction can still c
 const FIT_TTL_S = 90 * 86_400; // The original file never changes.
 // Bump a version when its cached shape or meaning changes.
 const FIT_CACHE_VERSION = "v1";
-const ACTIVITY_CACHE_VERSION = "v2";
+const ACTIVITY_CACHE_VERSION = "v3";
 const WORKOUT_CACHE_VERSION = "v1";
 
 export class ToolInputError extends Error {
@@ -225,8 +225,8 @@ function compactDetail(detail: ActivityDetail) {
 		anaerobic_training_effect: round(num(s.anaerobicTrainingEffect), 1),
 		training_effect_label: s.trainingEffectLabel,
 		training_load: round(num(s.activityTrainingLoad), 1),
-		// Garmin stores RPE x10 (10-100); report the 1-10 scale the user entered.
-		perceived_effort_rpe: num(s.directWorkoutRpe) === null ? null : round((num(s.directWorkoutRpe) as number) / 10, 1),
+		// Reported exactly as Garmin returns it (directWorkoutRpe); no rescaling.
+		perceived_effort_rpe: round(num(s.directWorkoutRpe), 1),
 		split_summaries_by_type: detail.splitSummaries?.map((split) =>
 			dropEmpty({
 				split_type: split.splitType,

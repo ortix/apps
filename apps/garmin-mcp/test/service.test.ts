@@ -95,7 +95,7 @@ describe("getActivity", () => {
 	it("joins the summary with FIT laps and the planned workout, and caches all three", async () => {
 		const d = deps(route);
 		const first = await getActivity(d, "42");
-		expect(first).toMatchObject({ id: "42", type: "running", start_utc: "2026-01-15T07:00:00Z", pace: "5:33", perceived_effort_rpe: 3 });
+		expect(first).toMatchObject({ id: "42", type: "running", start_utc: "2026-01-15T07:00:00Z", pace: "5:33", perceived_effort_rpe: 30 });
 		expect(first.laps).toHaveLength(2);
 		expect(first.planned_workout).toEqual([{ name: "Easy", sport: "running", steps: [{ step: 0, intensity: "active", duration_s: 1800, target: { type: "heart_rate", zone: 2 } }] }]);
 		expect(JSON.stringify(first)).not.toContain("52.1");
