@@ -42,7 +42,10 @@ Team `nicktsutsu` (`https://nicktsutsu.cloudflareaccess.com`), with GitHub as th
      - Grant session duration: 30 days
    - Browsers get the GitHub login (302). MCP clients get a 401 that points at Access's OAuth metadata.
 4. **`health checks`** (Self-hosted, hostname `*.tsutsu.dev`, path `healthz`). Policy `ci-smoke`, action **Service Auth**, with the `ci-smoke` service token. It's more specific than the wildcard, so the token works on `/healthz` and nowhere else.
-5. **Other subdomains:** any other public `*.tsutsu.dev` hostname is behind the login too, unless it gets its own Bypass application. `*.home.tsutsu.dev` isn't affected, because it never goes through Cloudflare.
+5. **Other subdomains:** the wildcard covers every public `*.tsutsu.dev` hostname, not just this repo's apps, unless a hostname gets its own more specific application. `*.home.tsutsu.dev` isn't affected, because it never goes through Cloudflare.
+   - **Before creating or changing the wildcard, list the zone's DNS records** (`GET /zones/<id>/dns_records`) and decide for each hostname outside `apps/` whether it belongs behind the login. Skipping this on 2026-11-07 broke the Home Assistant connector, whose hostname had its own OAuth.
+   - **Hostnames outside this repo today:**
+     - `ha-mcp.tsutsu.dev`: the Home Assistant MCP server, running on the Mac mini through the Cloudflare Tunnel `ha-mcp`. Intentionally behind this wildcard: claude.ai signs in through Access, and the tunnel's cloudflared verifies the Access token again. Its setup is in the `ortix/homeserver` repo, `docs/runbooks/ha-mcp.md`.
 
 **How to check:**
 - `curl -s -o /dev/null -w "%{http_code}" https://<app>.tsutsu.dev/healthz` answers `403` without the service token.
