@@ -1,7 +1,8 @@
 /**
  * Tool logic, independent of MCP so it can be unit tested with a mocked fetch.
- * Everything returned here is reduced to fields a model needs: no GPS
- * coordinates, owner names, profile images or internal Garmin ids.
+ * Everything returned here is reduced to fields a model needs: no owner names,
+ * profile images or internal Garmin ids. GPS position is included as Garmin
+ * provides it.
  */
 import { GarminApiError, type GarminClient } from "./garmin/client";
 import { downsample, dropEmpty, extractFit, parseFit, type ParsedFit } from "./garmin/fit";
@@ -17,8 +18,8 @@ const DAY_MS = 86_400_000;
 const ACTIVITY_TTL_S = 7 * 86_400; // Names and elevation correction can still change.
 const FIT_TTL_S = 90 * 86_400; // The original file never changes.
 // Bump a version when its cached shape or meaning changes.
-const FIT_CACHE_VERSION = "v1";
-const ACTIVITY_CACHE_VERSION = "v3";
+const FIT_CACHE_VERSION = "v2";
+const ACTIVITY_CACHE_VERSION = "v4";
 const WORKOUT_CACHE_VERSION = "v1";
 
 export class ToolInputError extends Error {
@@ -63,6 +64,8 @@ interface ActivityListItem {
 	activityName?: string;
 	startTimeLocal?: string;
 	startTimeGMT?: string;
+	startLatitude?: number;
+	startLongitude?: number;
 	activityType?: { typeKey?: string };
 	eventType?: { typeKey?: string };
 	distance?: number;
@@ -104,6 +107,8 @@ export async function listActivities(deps: Deps, input: { start_date: string; en
 			distance_m: round(a.distance, 1),
 			duration_s: round(a.duration, 1),
 			moving_s: round(a.movingDuration, 1),
+			start_lat: round(a.startLatitude, 6),
+			start_lon: round(a.startLongitude, 6),
 			speed_mps: round(a.averageSpeed, 2),
 			pace_min_km: paceMinKm(a.averageSpeed),
 			pace: paceMmss(a.averageSpeed),
@@ -206,6 +211,10 @@ function compactDetail(detail: ActivityDetail) {
 		distance_m: round(num(s.distance), 1),
 		duration_s: round(num(s.duration), 1),
 		moving_s: round(num(s.movingDuration), 1),
+		start_lat: round(num(s.startLatitude), 6),
+		start_lon: round(num(s.startLongitude), 6),
+		end_lat: round(num(s.endLatitude), 6),
+		end_lon: round(num(s.endLongitude), 6),
 		elapsed_s: round(num(s.elapsedDuration), 1),
 		speed_mps: round(speed, 2),
 		max_speed_mps: round(num(s.maxSpeed), 2),

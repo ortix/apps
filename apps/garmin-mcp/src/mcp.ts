@@ -58,7 +58,7 @@ export function createServer(appEnv: AppEnv = env as unknown as AppEnv): McpServ
 		"list_activities",
 		{
 			title: "List activities",
-			description: `Find the user's workouts between two dates, newest first. Use this first whenever a question refers to activities by date ("my runs last week", "my last ride") or across a period, since it returns the ids the other activity tools need. Returns one compact summary per activity: id, name, type, start time (local and UTC), distance, duration, pace, heart rate, elevation, power and training load. ${UNITS}`,
+			description: `Find the user's workouts between two dates, newest first. Use this first whenever a question refers to activities by date ("my runs last week", "my last ride") or across a period, since it returns the ids the other activity tools need. Returns one compact summary per activity: id, name, type, start time (local and UTC), start coordinates (start_lat, start_lon, decimal degrees), distance, duration, pace, heart rate, elevation, power and training load. ${UNITS}`,
 			inputSchema: {
 				start_date: date.describe("First date to include, YYYY-MM-DD, by the activity's local start time."),
 				end_date: date.describe("Last date to include, YYYY-MM-DD, inclusive."),
@@ -77,7 +77,7 @@ export function createServer(appEnv: AppEnv = env as unknown as AppEnv): McpServ
 		"get_activity",
 		{
 			title: "Get activity details",
-			description: `Get one activity's full summary, its laps and, when one was used, the planned structured workout. Use it to review a specific workout: lap-by-lap pace and heart rate, interval structure, planned vs actual, training effect, temperature. planned_workout lists each step's duration (seconds, metres or an end condition) and target (a zone number, or a decoded range in bpm, % of max HR, watts, % of FTP or pace); repeat steps say which step to repeat from and how many times. For how a metric changed within a lap or over time, use get_activity_streams instead. ${UNITS}`,
+			description: `Get one activity's full summary, its laps and, when one was used, the planned structured workout. Use it to review a specific workout: lap-by-lap pace and heart rate, interval structure, planned vs actual, training effect, temperature, start and end coordinates. planned_workout lists each step's duration (seconds, metres or an end condition) and target (a zone number, or a decoded range in bpm, % of max HR, watts, % of FTP or pace); repeat steps say which step to repeat from and how many times. For how a metric changed within a lap or over time, use get_activity_streams instead. ${UNITS}`,
 			inputSchema: { id: activityId },
 			annotations: READ_ONLY,
 		},
@@ -88,7 +88,7 @@ export function createServer(appEnv: AppEnv = env as unknown as AppEnv): McpServ
 		"get_activity_streams",
 		{
 			title: "Get activity time series",
-			description: `Get an activity's time series as columns and rows: time, distance, speed, pace, heart rate, cadence, elevation, and power if recorded. GPS position is never included. Use it for analysis the lap data can't answer, such as pacing drift, heart-rate decoupling, or effort on a climb. Use get_activity for ordinary workout questions, because this response is much larger. Each row covers one time bucket starting at t_s (seconds since the start, including pauses): distance_m is the cumulative distance at t_s, and the other columns are averages over the bucket. Cadence units are given in cadence_unit. If the requested resolution would be too large to return, a coarser one is used and a note says so. ${UNITS}`,
+			description: `Get an activity's time series as columns and rows: time, distance, speed, pace, heart rate, cadence, elevation, power and GPS position (lat and lon, decimal degrees) if recorded. Use it for analysis the lap data can't answer, such as pacing drift, heart-rate decoupling, or effort on a climb. Use get_activity for ordinary workout questions, because this response is much larger. Each row covers one time bucket starting at t_s (seconds since the start, including pauses): distance_m is the cumulative distance at t_s, and the other columns are averages over the bucket. Lat and lon are the position at t_s, not an average. Cadence units are given in cadence_unit. If the requested resolution would be too large to return, a coarser one is used and a note says so. ${UNITS}`,
 			inputSchema: {
 				id: activityId,
 				resolution: z

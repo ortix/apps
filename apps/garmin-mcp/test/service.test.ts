@@ -36,7 +36,7 @@ describe("listActivities", () => {
 		ownerFullName: "Private Name",
 	};
 
-	it("returns compact summaries with pace, without GPS or owner details", async () => {
+	it("returns compact summaries with pace and start position, without owner details", async () => {
 		const d = deps(() => Response.json([raw]));
 		const result = await listActivities(d, { start_date: "2026-01-01", end_date: "2026-01-31", type: "running" });
 		expect(result.activities?.[0]).toMatchObject({
@@ -48,7 +48,8 @@ describe("listActivities", () => {
 			pace_min_km: 5,
 			avg_hr_bpm: 150,
 		});
-		expect(JSON.stringify(result)).not.toMatch(/Private Name|52\.1|atitude/);
+		expect(result.activities?.[0]).toMatchObject({ start_lat: 52.1, start_lon: 4.3 });
+		expect(JSON.stringify(result)).not.toMatch(/Private Name/);
 		expect(d.apiCalls()[0]?.url.searchParams.get("activityType")).toBe("running");
 	});
 
@@ -84,7 +85,7 @@ describe("getActivity", () => {
 		activityId: 42,
 		activityName: "Run",
 		activityTypeDTO: { typeKey: "running" },
-		summaryDTO: { startTimeGMT: "2026-01-15T07:00:00.0", distance: 360, duration: 120, averageSpeed: 3, startLatitude: 52.1, directWorkoutRpe: 30 },
+		summaryDTO: { startTimeGMT: "2026-01-15T07:00:00.0", distance: 360, duration: 120, averageSpeed: 3, startLatitude: 52.1, startLongitude: 4.3, endLatitude: 52.2, endLongitude: 4.4, directWorkoutRpe: 30 },
 		splitSummaries: [{ splitType: "INTERVAL_ACTIVE", noOfSplits: 2, distance: 360, duration: 120, averageSpeed: 3 }],
 	};
 
@@ -98,7 +99,7 @@ describe("getActivity", () => {
 		expect(first).toMatchObject({ id: "42", type: "running", start_utc: "2026-01-15T07:00:00Z", pace: "5:33", perceived_effort_rpe: 30 });
 		expect(first.laps).toHaveLength(2);
 		expect(first.planned_workout).toEqual([{ name: "Easy", sport: "running", steps: [{ step: 0, intensity: "active", duration_s: 1800, target: { type: "heart_rate", zone: 2 } }] }]);
-		expect(JSON.stringify(first)).not.toContain("52.1");
+		expect(first).toMatchObject({ start_lat: 52.1, start_lon: 4.3, end_lat: 52.2, end_lon: 4.4 });
 		expect(d.apiCalls()).toHaveLength(3);
 
 		const second = await getActivity(d, "42");
@@ -144,7 +145,7 @@ describe("getActivityStreams", () => {
 		const d = deps(() => new Response(ZIP));
 		const result = await getActivityStreams(d, "42");
 		expect(result).toMatchObject({ id: "42", sport: "running", resolution_s: 10, points: 12, cadence_unit: "steps_per_min" });
-		expect(result.columns).toEqual(["t_s", "distance_m", "speed_mps", "pace_min_km", "hr_bpm", "cadence", "altitude_m", "power_w"]);
+		expect(result.columns).toEqual(["t_s", "distance_m", "speed_mps", "pace_min_km", "hr_bpm", "cadence", "altitude_m", "power_w", "lat", "lon"]);
 
 		await getActivityStreams(d, "42", 30);
 		expect(d.apiCalls()).toHaveLength(1);
@@ -153,7 +154,7 @@ describe("getActivityStreams", () => {
 	it("coarsens automatically to fit the cap, and says so", async () => {
 		const d = deps(() => new Response(ZIP));
 		await getActivityStreams(d, "42", 1); // populates the cache
-		const key = "v1:fit:42";
+		const key = "v2:fit:42";
 		const cached = JSON.parse((await d.cache.get(key)) as string);
 		const n = 40_000;
 		const fill = <T>(value: T) => Array.from({ length: n }, () => value);
@@ -165,6 +166,8 @@ describe("getActivityStreams", () => {
 			cadence: fill(170),
 			altitude_m: fill(100.5),
 			power_w: fill(250),
+			lat: fill(10.5),
+			lon: fill(20.5),
 		};
 		await d.cache.put(key, JSON.stringify(cached));
 
