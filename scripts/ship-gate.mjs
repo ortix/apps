@@ -5,7 +5,7 @@
 //
 // Usage: node scripts/ship-gate.mjs <base-rev> <head-rev>
 // Prints JSON: { "ok": boolean, "reasons": string[], "apps": string[] }
-import { appOfPath, appsAt, changedFiles, protectedFields, readAppAt, SENSITIVE_PATHS, validateApp } from "./lib/platform.mjs";
+import { appOfPath, appsAt, changedFiles, codePathsOf, DEPLOY_MODE_RANK, deployMode, protectedFields, readAppAt, SENSITIVE_PATHS, validateApp } from "./lib/platform.mjs";
 
 /** Paths an automatic merge may change at all. Everything else waits for the owner. */
 const ALLOWED_PATHS = [/^apps\/[^/]+\//, /^templates\//, /^docs\//, /^package-lock\.json$/, /^README\.md$/];
@@ -49,14 +49,27 @@ export function gate(base, head) {
 			const was = JSON.stringify(protectedFields(before.wrangler, protectedVars));
 			const now = JSON.stringify(protectedFields(after.wrangler, protectedVars));
 			if (was !== now) reasons.push(`apps/${name}: changes its Worker name, domain, storage bindings or protected vars`);
-			if (before.pkg?.platform?.autoDeploy === false && after.pkg?.platform?.autoDeploy !== false) {
+			if (DEPLOY_MODE_RANK[deployMode(after.pkg)] > DEPLOY_MODE_RANK[deployMode(before.pkg)]) {
 				reasons.push(`apps/${name}: turns on automatic deploys, which needs the owner's go-ahead`);
 			}
 			if (JSON.stringify(before.pkg?.platform?.protectedVars ?? []) !== JSON.stringify(after.pkg?.platform?.protectedVars ?? [])) {
 				reasons.push(`apps/${name}: changes platform.protectedVars`);
 			}
 		}
-		if (after.pkg?.platform?.autoDeploy !== false && problems.length === 0) deployable.push(name);
+		// An app that deploys only code changes holds anything else for the owner. A
+		// lockfile change can alter its dependencies even when its package.json is untouched.
+		if (deployMode(after.pkg) === "code") {
+			const codePaths = codePathsOf(name);
+			for (const { path } of files) {
+				if (appOfPath(path) === name && !codePaths.some((re) => re.test(path))) {
+					reasons.push(`${path} is not code or tests; apps/${name} deploys only code changes automatically`);
+				}
+			}
+			if (files.some(({ path }) => path === "package-lock.json")) {
+				reasons.push(`package-lock.json changes alongside apps/${name}, which deploys only code changes automatically`);
+			}
+		}
+		if (deployMode(after.pkg) !== "off" && problems.length === 0) deployable.push(name);
 	}
 
 	return { ok: reasons.length === 0, reasons, apps: deployable.sort() };
