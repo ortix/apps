@@ -1,7 +1,6 @@
 /**
  * Turns Garmin's activity download (a ZIP holding a .fit file) into compact
- * columnar data. GPS fields are never read, so they can't reach a cache or a
- * tool response.
+ * columnar data, including GPS position (lat/lon in decimal degrees) when recorded.
  */
 import { Decoder, Stream } from "@garmin/fitsdk";
 import { unzipSync } from "fflate";
@@ -23,6 +22,8 @@ export interface Series {
 	cadence: (number | null)[];
 	altitude_m: (number | null)[];
 	power_w: (number | null)[];
+	lat: (number | null)[];
+	lon: (number | null)[];
 }
 
 export interface Lap {
@@ -57,6 +58,11 @@ type Mesg = Record<string, unknown>;
 
 const num = (value: unknown): number | null => (typeof value === "number" && Number.isFinite(value) ? value : null);
 const str = (value: unknown): string | null => (typeof value === "string" ? value : null);
+/** FIT stores position as signed 32-bit semicircles; 2^31 semicircles = 180 degrees. */
+const degrees = (value: unknown): number | null => {
+	const semicircles = num(value);
+	return semicircles === null ? null : (semicircles * 180) / 2 ** 31;
+};
 const iso = (value: unknown): string | null => (value instanceof Date ? value.toISOString() : null);
 
 /** Returns the FIT bytes from Garmin's ZIP, or null for non-FIT uploads (GPX, TCX). */
@@ -92,7 +98,7 @@ export function parseFit(bytes: Uint8Array): ParsedFit {
 	const onFoot = sport === "running" || sport === "walking" || sport === "hiking";
 
 	const start = records.find((r) => r.timestamp instanceof Date)?.timestamp as Date | undefined;
-	const series: Series = { t: [], distance_m: [], speed_mps: [], hr_bpm: [], cadence: [], altitude_m: [], power_w: [] };
+	const series: Series = { t: [], distance_m: [], speed_mps: [], hr_bpm: [], cadence: [], altitude_m: [], power_w: [], lat: [], lon: [] };
 	for (const record of records) {
 		if (!(record.timestamp instanceof Date) || !start) continue;
 		series.t.push(Math.round((record.timestamp.getTime() - start.getTime()) / 1000));
@@ -101,6 +107,8 @@ export function parseFit(bytes: Uint8Array): ParsedFit {
 		series.hr_bpm.push(num(record.heartRate));
 		series.altitude_m.push(num(record.enhancedAltitude) ?? num(record.altitude));
 		series.power_w.push(num(record.power));
+		series.lat.push(degrees(record.positionLat));
+		series.lon.push(degrees(record.positionLong));
 		const cadence = num(record.cadence);
 		series.cadence.push(cadence === null ? null : onFoot ? (cadence + (num(record.fractionalCadence) ?? 0)) * 2 : cadence);
 	}
@@ -142,7 +150,7 @@ export function dropEmpty<T extends Record<string, unknown>>(value: T): Partial<
 	return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== null && v !== undefined)) as Partial<T>;
 }
 
-const COLUMNS = ["t_s", "distance_m", "speed_mps", "pace_min_km", "hr_bpm", "cadence", "altitude_m", "power_w"] as const;
+const COLUMNS = ["t_s", "distance_m", "speed_mps", "pace_min_km", "hr_bpm", "cadence", "altitude_m", "power_w", "lat", "lon"] as const;
 
 export interface Downsampled {
 	resolution_s: number;
@@ -163,10 +171,19 @@ function mean(values: (number | null)[], from: number, to: number): number | nul
 	return count === 0 ? null : sum / count;
 }
 
+/** First non-null value in [from, to). Used for values that can't be averaged, like distance and position. */
+function first(values: (number | null)[], from: number, to: number): number | null {
+	for (let i = from; i < to; i++) {
+		const value = values[i];
+		if (value !== null && value !== undefined) return value;
+	}
+	return null;
+}
+
 /**
  * Averages samples into fixed time buckets. Averaging keeps short surges visible
  * in the mean, unlike picking every Nth sample. Distance is cumulative, so it
- * takes the first value in the bucket, aligned with t_s. Columns with no data
+ * takes the first value in the bucket, aligned with t_s; so does position. Columns with no data
  * at all are omitted.
  */
 export function downsample(series: Series, resolutionS: number): Downsampled {
@@ -178,8 +195,7 @@ export function downsample(series: Series, resolutionS: number): Downsampled {
 		while (to < series.t.length && Math.floor((series.t[to] as number) / resolutionS) === bucket) to++;
 
 		// Cumulative distance at the bucket's start, so each row describes the moment t_s.
-		let distance: number | null = null;
-		for (let i = from; i < to && distance === null; i++) distance = series.distance_m[i] ?? null;
+		const distance = first(series.distance_m, from, to);
 		const speed = mean(series.speed_mps, from, to);
 		rows.push([
 			bucket * resolutionS,
@@ -190,6 +206,8 @@ export function downsample(series: Series, resolutionS: number): Downsampled {
 			round(mean(series.cadence, from, to), 0),
 			round(mean(series.altitude_m, from, to), 1),
 			round(mean(series.power_w, from, to), 0),
+			round(first(series.lat, from, to), 6),
+			round(first(series.lon, from, to), 6),
 		]);
 		from = to;
 	}

@@ -40,8 +40,11 @@ describe("parseFit (runs inside workerd)", () => {
 		expect(parsed.laps[0]?.pace_min_km).toBeCloseTo(5.56, 2);
 	});
 
-	it("never exposes position data", () => {
-		expect(JSON.stringify(parsed)).not.toMatch(/position|latitude|longitude|lat\b|long\b/i);
+	it("reads GPS position as decimal degrees", () => {
+		expect(parsed.series.lat[0]).toBeCloseTo(10, 6);
+		expect(parsed.series.lon[0]).toBeCloseTo(20, 6);
+		expect(parsed.series.lat[100]).toBeCloseTo(10.01, 6);
+		expect(parsed.series.lon[100]).toBeCloseTo(20.01, 6);
 	});
 
 	it("rejects bytes that are not FIT", () => {
@@ -66,6 +69,20 @@ describe("downsample", () => {
 		expect(result.rows[0]?.[col("distance_m")]).toBe(0); // cumulative distance at t_s
 		expect(result.rows[1]?.[col("distance_m")]).toBe(30);
 		expect(result.rows[0]?.[col("pace_min_km")]).toBeCloseTo(5.56, 2);
+	});
+
+	it("returns the position at the start of each bucket, not an average", () => {
+		const result = downsample(series, 10);
+		const lat = result.columns.indexOf("lat");
+		const lon = result.columns.indexOf("lon");
+		expect(result.rows[1]?.[lat]).toBe(10.001);
+		expect(result.rows[1]?.[lon]).toBe(20.001);
+	});
+
+	it("omits lat and lon when the file has no GPS (indoor activity)", () => {
+		const result = downsample({ ...series, lat: series.lat.map(() => null), lon: series.lon.map(() => null) }, 10);
+		expect(result.columns).not.toContain("lat");
+		expect(result.columns).not.toContain("lon");
 	});
 
 	it("omits columns with no data, such as power on older devices", () => {
