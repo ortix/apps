@@ -101,6 +101,7 @@ Not done: <what's missing or left out of v1, or "nothing">
 - Changes to code, tests and `public/` ship automatically.
 - The gate holds anything that touches the name, domain, storage bindings, protected vars, `autoDeploy`, or deletes an app.
 - Apps with `"autoDeploy": false` in `package.json` (such as `garmin-mcp`) merge but don't deploy. Tell Nick to deploy them from the Actions tab.
+- Apps with `"autoDeploy": "code"` deploy automatically when the change only touches `src/`, `test/`, `public/`, `scripts/` or `*.md` in the app. Any change to `wrangler.jsonc`, `package.json`, migrations, `.dev.vars.example` or the lockfile is held for Nick. Say which case it was in the report.
 - `garmin-mcp` has its own README. Don't rewrite its logic unless asked.
 
 ## Reference

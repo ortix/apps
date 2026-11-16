@@ -112,6 +112,26 @@ export function protectedFields(wrangler, protectedVars = []) {
 	};
 }
 
+/**
+ * How a live app's merged changes reach production, from platform.autoDeploy:
+ *   "off"  (false)   merge, but the owner deploys by hand
+ *   "code" ("code")  deploy automatically when the change only touches the app's
+ *                    code and tests; config, dependencies and migrations wait for the owner
+ *   "full" (absent or true) deploy every change the gate lets through
+ * Anything unrecognised counts as "off", and validateApp reports it.
+ */
+export function deployMode(pkg) {
+	const value = pkg?.platform?.autoDeploy;
+	if (value === undefined || value === true) return "full";
+	if (value === "code") return "code";
+	return "off";
+}
+/** Higher means more changes deploy without the owner. */
+export const DEPLOY_MODE_RANK = { off: 0, code: 1, full: 2 };
+
+/** App files a "code" app may change and still deploy automatically. Everything else, such as wrangler.jsonc, package.json or migrations, is held. */
+export const codePathsOf = (name) => [new RegExp(`^apps/${name}/(src|test|public|scripts)/`), new RegExp(`^apps/${name}/[^/]+\\.md$`)];
+
 /** Returns human-readable problems with one app's configuration. */
 export function validateApp(app) {
 	const problems = [];
@@ -138,6 +158,8 @@ export function validateApp(app) {
 		for (const script of ["typecheck", "test"]) if (!pkg.scripts?.[script]) problems.push(`${name}: package.json needs a "${script}" script`);
 		const platform = pkg.platform;
 		if (!platform || !["app", "mcp"].includes(platform.kind)) problems.push(`${name}: package.json needs "platform": { "kind": "app" | "mcp", ... }`);
+		const autoDeploy = platform?.autoDeploy;
+		if (autoDeploy !== undefined && typeof autoDeploy !== "boolean" && autoDeploy !== "code") problems.push(`${name}: platform.autoDeploy must be true, false or "code"`);
 		if (!Array.isArray(platform?.smoke) || platform.smoke.length === 0) problems.push(`${name}: package.json platform.smoke needs at least one { "path", "status" } check`);
 	}
 	return problems;

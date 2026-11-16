@@ -83,6 +83,9 @@ describe("ship gate", () => {
 		write("apps/garmin-mcp/wrangler.jsonc", { ...goodWrangler("garmin-mcp"), kv_namespaces: [{ binding: "OAUTH_KV", id: "abc" }], vars: { MCP_SERVER_URL: "https://garmin-mcp.tsutsu.dev/mcp" } });
 		write("apps/garmin-mcp/package.json", goodPkg("garmin-mcp", { kind: "mcp", autoDeploy: false, protectedVars: ["MCP_SERVER_URL"] }));
 		write("apps/garmin-mcp/src/index.ts", "export {}");
+		write("apps/trainer/wrangler.jsonc", goodWrangler("trainer"));
+		write("apps/trainer/package.json", { ...goodPkg("trainer", { autoDeploy: "code" }), dependencies: { hono: "4.0.0" } });
+		write("apps/trainer/src/index.ts", "export {}");
 		commit("base");
 	});
 	after(() => rmSync(repo, { recursive: true, force: true }));
@@ -126,6 +129,56 @@ describe("ship gate", () => {
 		const result = check(commit("auto"));
 		assert.equal(result.ok, false);
 		assert.match(result.reasons.join("\n"), /automatic deploys/);
+	});
+
+	it("deploys code and test changes to an app set to deploy code only", () => {
+		branch("claude/trainer-code");
+		write("apps/trainer/src/index.ts", "export const x = 1;");
+		write("apps/trainer/test/index.test.ts", "export {}");
+		write("apps/trainer/scripts/fixture.ts", "export {}");
+		write("apps/trainer/README.md", "docs");
+		const result = check(commit("trainer code"));
+		assert.deepEqual(result, { ok: true, reasons: [], apps: ["trainer"] });
+	});
+
+	it("holds config, dependency and migration changes to an app set to deploy code only", () => {
+		for (const [file, content] of [
+			["apps/trainer/wrangler.jsonc", goodWrangler("trainer", { vars: { X: "1" } })],
+			["apps/trainer/package.json", { ...goodPkg("trainer", { autoDeploy: "code" }), dependencies: { hono: "4.0.0", evil: "1.0.0" } }],
+			["apps/trainer/migrations/0002.sql", "DROP TABLE t;"],
+			["apps/trainer/.dev.vars.example", "NEW_KEY="],
+		]) {
+			branch(`claude/trainer-${file.replace(/\W/g, "-")}`);
+			write(file, content);
+			const result = check(commit(file));
+			assert.equal(result.ok, false, file);
+			assert.match(result.reasons.join("\n"), /deploys only code changes/, file);
+		}
+	});
+
+	it("holds a lockfile change that comes with a code-only app", () => {
+		branch("claude/trainer-lock");
+		write("apps/trainer/src/index.ts", "export const y = 2;");
+		write("package-lock.json", "{}");
+		const result = check(commit("lock"));
+		assert.equal(result.ok, false);
+		assert.match(result.reasons.join("\n"), /package-lock\.json/);
+	});
+
+	it("holds widening how an app deploys, but not narrowing it", () => {
+		branch("claude/trainer-widen");
+		write("apps/trainer/package.json", { ...goodPkg("trainer"), dependencies: { hono: "4.0.0" } });
+		assert.match(check(commit("widen")).reasons.join("\n"), /automatic deploys/);
+		branch("claude/trainer-narrow");
+		write("apps/trainer/package.json", { ...goodPkg("trainer", { autoDeploy: false }), dependencies: { hono: "4.0.0" } });
+		const narrow = check(commit("narrow"));
+		assert.equal(narrow.reasons.some((r) => /automatic deploys/.test(r)), false);
+		assert.deepEqual(narrow.apps, []);
+	});
+
+	it("rejects an unknown autoDeploy value", () => {
+		const problems = validateApp({ name: "habits", wrangler: goodWrangler("habits"), pkg: goodPkg("habits", { autoDeploy: "sometimes" }) });
+		assert.match(problems.join("\n"), /autoDeploy must be/);
 	});
 
 	it("holds deleting a live app", () => {
